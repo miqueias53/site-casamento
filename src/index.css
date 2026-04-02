@@ -1,0 +1,171 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --font-titulos: "Playfair Display", Georgia, serif;
+    --font-textos: "Lora", Georgia, serif;
+    --font-destaques: "Montserrat", ui-sans-serif, system-ui, sans-serif;
+    --color-titulos: #241b2f;
+    --color-textos: #5a4c67;
+    --color-destaques: #312e81;
+    --size-h1: 68px;
+    --size-h2: 48px;
+    --size-h3: 38px;
+    --size-h4: 28px;
+    --size-h5: 22px;
+    --size-h6: 18px;
+    --size-p: 16px;
+    --size-small: 14px;
+    --size-data: 18px;
+    --weight-titulos: 700;
+    --weight-textos: 400;
+    --weight-destaques: 500;
+    --lh-titulos: 1.08;
+    --lh-geral: 1.7;
+    --lh-destaques: 1.35;
+    --ls-titulos: 0.02em;
+    --ls-textos: 0em;
+    --ls-destaques: 0.04em;
+  }
+
+  *,
+  ::before,
+  ::after {
+    box-sizing: border-box;
+  }
+
+  html {
+    scroll-behavior: smooth;
+    scroll-padding-top: 110px;
+  }
+
+  body {
+    min-width: 320px;
+    background: #fffdf8;
+    color: #241b2f;
+    font-family: var(--font-textos, Georgia, serif) !important;
+    font-size: var(--size-p, 16px) !important;
+    font-weight: var(--weight-textos, 400) !important;
+    line-height: var(--lh-geral, 1.7) !important;
+    letter-spacing: var(--ls-textos, 0em) !important;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  a {
+    color: inherit;
+    text-decoration: none;
+  }
+
+  img {
+    display: block;
+    max-width: 100%;
+  }
+
+  button,
+  input,
+  textarea,
+  select {
+    font: inherit;
+  }
+
+  section {
+    width: 100%;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-family: var(--font-titulos, inherit) !important;
+    font-weight: var(--weight-titulos, 700) !important;
+    line-height: var(--lh-titulos, 1.08) !important;
+    letter-spacing: var(--ls-titulos, 0em) !important;
+    color: var(--color-titulos, inherit);
+  }
+
+  h1 {
+    font-size: var(--size-h1, 68px) !important;
+  }
+
+  h2 {
+    font-size: var(--size-h2, 48px) !important;
+  }
+
+  h3 {
+    font-size: var(--size-h3, 38px) !important;
+  }
+
+  h4 {
+    font-size: var(--size-h4, 28px) !important;
+  }
+
+  h5 {
+    font-size: var(--size-h5, 22px) !important;
+  }
+
+  h6 {
+    font-size: var(--size-h6, 18px) !important;
+  }
+
+  p,
+  li {
+    font-family: var(--font-textos, inherit) !important;
+    font-size: var(--size-p, 16px) !important;
+    font-weight: var(--weight-textos, 400) !important;
+    line-height: var(--lh-geral, 1.7) !important;
+    letter-spacing: var(--ls-textos, 0em) !important;
+    color: var(--color-textos, inherit);
+  }
+
+  span,
+  div {
+    font-family: var(--font-textos, inherit);
+    color: var(--color-textos, inherit);
+  }
+
+  small,
+  time,
+  .typography-accent,
+  strong.typography-accent {
+    font-family: var(--font-destaques, var(--font-textos, inherit)) !important;
+    font-size: var(--size-data, 18px) !important;
+    font-weight: var(--weight-destaques, 500) !important;
+    line-height: var(--lh-destaques, 1.35) !important;
+    letter-spacing: var(--ls-destaques, 0.04em) !important;
+    color: var(--color-destaques, inherit);
+  }
+
+  #inicio p,
+  footer p:nth-of-type(2) {
+    font-family: var(--font-destaques, var(--font-textos, inherit)) !important;
+    font-size: var(--size-data, 18px) !important;
+    font-weight: var(--weight-destaques, 500) !important;
+    line-height: var(--lh-destaques, 1.35) !important;
+    letter-spacing: var(--ls-destaques, 0.04em) !important;
+    color: var(--color-destaques, inherit);
+  }
+
+  footer p:first-of-type {
+    font-family: var(--font-destaques, var(--font-textos, inherit)) !important;
+    font-size: var(--size-small, 14px) !important;
+    font-weight: var(--weight-destaques, 500) !important;
+    line-height: var(--lh-destaques, 1.35) !important;
+    letter-spacing: var(--ls-destaques, 0.02em) !important;
+    color: var(--color-destaques, inherit);
+  }
+}
+
+@keyframes premiumFadeUp {
+  0% {
+    opacity: 0;
+    transform: translateY(40px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
