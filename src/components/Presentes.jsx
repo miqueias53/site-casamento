@@ -76,6 +76,17 @@ export default function Presentes({ siteConfig }) {
     }
   };
 
+  const copyAddress = async () => {
+    if (!deliveryConfig?.endereco) return;
+    try {
+      await navigator.clipboard.writeText(deliveryConfig.endereco);
+      setToast("Endereço copiado.");
+    } catch (error) {
+      console.error(error);
+      setToast("Não foi possível copiar o endereço.");
+    }
+  };
+
   const continueToStore = () => {
     if (!selectedGift?.linkCompra) {
       setToast("Este presente ainda não possui link de loja.");
@@ -91,7 +102,7 @@ export default function Presentes({ siteConfig }) {
       <div style={styles.header}>
         <span style={styles.eyebrow}>{safeSiteConfig?.presentesEyebrow || "Lista premium"}</span>
         <h2 style={styles.title}>{safeSiteConfig?.presentesTitulo || "Presentes e contribuições"}</h2>
-        <p style={styles.copy}>
+        <p className="whitespace-pre-line" style={styles.copy}>
           {safeSiteConfig?.presentesDescricao ||
             "Escolhemos presentes com carinho e deixámos também a opção de contribuição via PIX para quem preferir uma oferta direta."}
         </p>
@@ -105,10 +116,10 @@ export default function Presentes({ siteConfig }) {
           <div>
             <span style={styles.eyebrow}>{safeSiteConfig?.presentesPixEyebrow || "PIX"}</span>
             <h3 style={styles.subtitle}>{safeSiteConfig?.presentesPixTitulo || "Contribuição digital"}</h3>
-            <p style={styles.copy}>
+            <p className="whitespace-pre-line" style={styles.copy}>
               {pix.mensagem || "Se preferir, pode contribuir diretamente através da nossa chave PIX."}
             </p>
-            <div style={styles.pixMeta}>{pix.titular || "Titular"} {pix.banco ? `· ${pix.banco}` : ""}</div>
+            <div className="whitespace-pre-line" style={styles.pixMeta}>{pix.titular || "Titular"} {pix.banco ? `· ${pix.banco}` : ""}</div>
           </div>
 
           <div style={styles.pixBoxWrap}>
@@ -188,11 +199,14 @@ export default function Presentes({ siteConfig }) {
           >
             <span style={styles.eyebrow}>Entrega</span>
             <h3 style={styles.subtitle}>{deliveryConfig?.titulo || "Antes de ir para a loja"}</h3>
-            <p style={styles.copy}>{deliveryConfig?.mensagem}</p>
+            <p className="whitespace-pre-line" style={styles.copy}>{deliveryConfig?.mensagem}</p>
 
             <div style={styles.deliveryBox}>
               <strong style={styles.deliveryLabel}>Endereço de entrega</strong>
-              <p style={styles.deliveryAddress}>{deliveryConfig?.endereco}</p>
+              <p className="whitespace-pre-line" style={styles.deliveryAddress}>{deliveryConfig?.endereco}</p>
+              <button type="button" onClick={copyAddress} style={styles.secondaryButtonCompact}>
+                Copiar Endereço
+              </button>
             </div>
 
             <div style={styles.modalActions}>
@@ -238,9 +252,10 @@ const styles = {
   disabledButton: { padding: "16px 18px", borderRadius: 18, border: "1px solid rgba(36,27,47,0.08)", background: "#ece8e1", color: "#90859f", fontSize: 12, fontWeight: 900, letterSpacing: "0.16em", textTransform: "uppercase", cursor: "not-allowed" },
   disabledButtonCompact: { padding: "14px 16px", borderRadius: 16, border: "1px solid rgba(36,27,47,0.08)", background: "#ece8e1", color: "#90859f", fontSize: 11, fontWeight: 900, letterSpacing: "0.14em", textTransform: "uppercase", cursor: "not-allowed" },
   toast: { position: "fixed", bottom: 28, left: "50%", transform: "translateX(-50%)", padding: "14px 18px", borderRadius: 18, background: "#241b2f", color: "#fffaf2", boxShadow: "0 24px 50px rgba(36,27,47,0.26)", zIndex: 80 },
-  modalCard: { width: "min(560px, 100%)", padding: 34, borderRadius: 30, background: "#fffefb", border: "1px solid rgba(196,166,97,0.18)", boxShadow: "0 30px 70px rgba(36,27,47,0.22)", display: "grid", gap: 18 },
-  deliveryBox: { padding: 20, borderRadius: 22, background: "rgba(49,46,129,0.05)", border: "1px solid rgba(49,46,129,0.08)" },
+  modalCard: { width: "min(720px, 100%)", padding: 34, borderRadius: 30, background: "#fffefb", border: "1px solid rgba(196,166,97,0.18)", boxShadow: "0 30px 70px rgba(36,27,47,0.22)", display: "grid", gap: 18 },
+  deliveryBox: { padding: 20, borderRadius: 22, background: "rgba(49,46,129,0.05)", border: "1px solid rgba(49,46,129,0.08)", display: "grid", gap: 12, justifyItems: "start" },
   deliveryLabel: { display: "block", marginBottom: 10, fontSize: 11, fontWeight: 800, letterSpacing: "0.18em", textTransform: "uppercase", color: "#8f7a4f" },
   deliveryAddress: { margin: 0, whiteSpace: "pre-line", color: "#241b2f", lineHeight: 1.7 },
   modalActions: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12 },
+  secondaryButtonCompact: { padding: "12px 14px", borderRadius: 14, border: "1px solid rgba(49,46,129,0.16)", background: "rgba(255,255,255,0.82)", color: "#312e81", fontSize: 11, fontWeight: 800, letterSpacing: "0.12em", textTransform: "uppercase", cursor: "pointer" },
 };

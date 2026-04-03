@@ -28,6 +28,7 @@ export default function BlocoExtra({ siteConfig, siteImages }) {
             {safeSiteConfig?.blocoExtraTitulo || "Uma mensagem especial"}
           </h2>
           <p
+            className="whitespace-pre-line"
             style={{
               ...styles.copy,
               fontFamily: safeSiteConfig?.textosFontFamily || styles.copy.fontFamily,

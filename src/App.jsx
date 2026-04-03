@@ -37,6 +37,33 @@ function sectionAnimation(delay) {
   };
 }
 
+function LoadingScreen({ backgroundColor }) {
+  useEffect(() => {
+    if (typeof document === "undefined") return undefined;
+
+    const previousBodyBackground = document.body.style.background;
+    const previousBodyBackgroundColor = document.body.style.backgroundColor;
+
+    document.body.style.background = backgroundColor;
+    document.body.style.backgroundColor = backgroundColor;
+
+    return () => {
+      document.body.style.background = previousBodyBackground;
+      document.body.style.backgroundColor = previousBodyBackgroundColor;
+    };
+  }, [backgroundColor]);
+
+  return (
+    <div style={loadingScreenStyle(backgroundColor)}>
+      <div style={loadingCardStyle}>
+        <div style={loadingSpinnerStyle} aria-hidden="true" />
+        <p style={loadingTitleStyle}>A preparar o ambiente...</p>
+        <span style={loadingSubtitleStyle}>Estamos a sincronizar as preferências do site.</span>
+      </div>
+    </div>
+  );
+}
+
 function PublicPage({ setView, siteConfig = defaultSiteConfig, siteImages = emptyImageConfig, isBootstrapping = false }) {
   const safeSiteConfig = normalizeSiteConfig(siteConfig);
   const safeSiteImages = mergeImageConfig(siteImages);
@@ -177,6 +204,7 @@ export default function App() {
   const [siteImages, setSiteImages] = useState(emptyImageConfig);
   const [contentReady, setContentReady] = useState(false);
   const [imagesReady, setImagesReady] = useState(false);
+  const [isFirebaseLoaded, setIsFirebaseLoaded] = useState(false);
 
   useEffect(() => {
     const unsubscribe = onSnapshot(
@@ -257,11 +285,19 @@ export default function App() {
   const safeSiteConfig = useMemo(() => normalizeSiteConfig(siteConfig), [siteConfig]);
   const safeSiteImages = useMemo(() => mergeImageConfig(siteImages), [siteImages]);
   const isBootstrapping = !contentReady || !imagesReady;
+  const loadingBackgroundColor = safeSiteConfig?.corFundoGlobal?.trim() || defaultSiteConfig.corFundoGlobal || "#fffdf8";
+
+  useEffect(() => {
+    if (!contentReady || !imagesReady) return;
+    setIsFirebaseLoaded(true);
+  }, [contentReady, imagesReady]);
 
   return (
     <TypographyProvider>
       {view === "admin" ? (
         <Admin onBack={() => setView("public")} />
+      ) : !isFirebaseLoaded ? (
+        <LoadingScreen backgroundColor={loadingBackgroundColor} />
       ) : (
         <PublicPage
           setView={setView}
@@ -323,4 +359,51 @@ const loadingRibbonStyle = {
   letterSpacing: "0.14em",
   textTransform: "uppercase",
   boxShadow: "0 12px 30px rgba(36, 27, 47, 0.06)",
+};
+
+const loadingScreenStyle = (backgroundColor) => ({
+  minHeight: "100vh",
+  display: "grid",
+  placeItems: "center",
+  padding: "24px",
+  backgroundColor,
+  backgroundImage:
+    "radial-gradient(circle at top, rgba(196, 166, 97, 0.16), transparent 32%), linear-gradient(180deg, rgba(255,255,255,0.24) 0%, rgba(247,241,231,0.44) 52%, rgba(243,235,222,0.58) 100%)",
+});
+
+const loadingCardStyle = {
+  width: "min(420px, 100%)",
+  padding: "32px 28px",
+  borderRadius: 28,
+  border: "1px solid rgba(196, 166, 97, 0.18)",
+  background: "rgba(255, 253, 248, 0.84)",
+  boxShadow: "0 24px 60px rgba(36, 27, 47, 0.08)",
+  display: "grid",
+  justifyItems: "center",
+  gap: 14,
+  textAlign: "center",
+  backdropFilter: "blur(12px)",
+};
+
+const loadingSpinnerStyle = {
+  width: 40,
+  height: 40,
+  borderRadius: "999px",
+  border: "3px solid rgba(196, 166, 97, 0.24)",
+  borderTopColor: "#a88642",
+  animation: "premiumSpin 1s linear infinite",
+};
+
+const loadingTitleStyle = {
+  margin: 0,
+  color: "#241b2f",
+  fontSize: 18,
+  fontWeight: 700,
+};
+
+const loadingSubtitleStyle = {
+  color: "#6a5531",
+  fontSize: 13,
+  fontWeight: 600,
+  letterSpacing: "0.04em",
 };

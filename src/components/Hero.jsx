@@ -58,6 +58,7 @@ export default function Hero({ siteConfig, siteImages }) {
         </h1>
 
         <p
+          className="whitespace-pre-line"
           style={{
             fontFamily: safeSiteConfig?.dataFontFamily || "Georgia, serif",
             fontSize: safeSiteConfig?.dataFontSize || "18px",

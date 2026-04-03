@@ -74,6 +74,7 @@ export default function Historia({ siteConfig, siteImages }) {
       </h2>
 
       <p
+        className="whitespace-pre-line"
         style={{
           maxWidth: "600px",
           margin: "0 auto 50px",
@@ -157,6 +158,7 @@ export default function Historia({ siteConfig, siteImages }) {
             </h3>
 
             <p
+              className="whitespace-pre-line"
               style={{
                 margin: "12px 0 0",
                 color: "#555",

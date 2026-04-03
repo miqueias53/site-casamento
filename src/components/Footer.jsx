@@ -35,6 +35,7 @@ export default function Footer({ siteConfig, siteImages }) {
       </h2>
 
       <p
+        className="whitespace-pre-line"
         style={{
           marginBottom: "15px",
           fontSize: safeSiteConfig?.versiculoFontSize || "13px",
@@ -47,6 +48,7 @@ export default function Footer({ siteConfig, siteImages }) {
       </p>
 
       <p
+        className="whitespace-pre-line"
         style={{
           fontSize: safeSiteConfig?.dataFontSize || "13px",
           fontFamily: safeSiteConfig?.dataFontFamily || "serif",
@@ -66,6 +68,7 @@ export default function Footer({ siteConfig, siteImages }) {
       />
 
       <p
+        className="whitespace-pre-line"
         style={{
           fontSize: "12px",
           opacity: "0.7",

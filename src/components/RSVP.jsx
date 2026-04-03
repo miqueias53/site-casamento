@@ -123,6 +123,7 @@ export default function RSVP({ siteConfig }) {
             {safeSiteConfig?.rsvpTitulo || "RSVP personalizado"}
           </h2>
           <p
+            className="whitespace-pre-line"
             style={{
               ...styles.copy,
               fontFamily: safeSiteConfig?.textosFontFamily,
@@ -137,7 +138,7 @@ export default function RSVP({ siteConfig }) {
           <div style={styles.deadlineCard}>
             <span style={styles.deadlineLabel}>{safeSiteConfig?.rsvpPrazoLabel || "Data limite para confirmação"}</span>
             <strong style={styles.deadlineDate}>{safeSiteConfig?.rsvpPrazoData || "11 de maio"}</strong>
-            <p style={styles.deadlineCopy}>
+            <p className="whitespace-pre-line" style={styles.deadlineCopy}>
               {safeSiteConfig?.rsvpPrazoTexto || "Agradecemos, com carinho, que a sua resposta seja enviada até esta data."}
             </p>
           </div>
@@ -188,6 +189,7 @@ export default function RSVP({ siteConfig }) {
                 {(safeSiteConfig?.rsvpSaudacaoPrefixo || "Olá,")} {selectedGuest.nome}.
               </h3>
               <p
+                className="whitespace-pre-line"
                 style={{
                   ...styles.copy,
                   fontFamily: safeSiteConfig?.textosFontFamily,
@@ -238,7 +240,7 @@ export default function RSVP({ siteConfig }) {
             </div>
           )}
 
-          {status ? <div style={styles.status}>{status}</div> : null}
+          {status ? <div className="whitespace-pre-line" style={styles.status}>{status}</div> : null}
         </div>
       </div>
     </section>
