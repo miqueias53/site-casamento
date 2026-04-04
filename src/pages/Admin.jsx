@@ -7,6 +7,7 @@ import { emptyImageConfig, imageFallbacks, mergeImageConfig, resolveImageSource 
 import { normalizeDeliveryConfig } from "../config/deliveryConfig.js";
 import { defaultSiteConfig, normalizeSiteConfig } from "../config/siteConfig.js";
 import { exportRowsToPdf, exportRowsToXlsx } from "../utils/adminExport.js";
+import { GUEST_STATUS, getGuestConfirmedFlag, normalizeGuestStatus } from "../utils/guestStatus.js";
 
 const presentesRef = () => collection(db, "artifacts", appId, "public", "data", "presentes");
 const convidadosRef = () => collection(db, "artifacts", appId, "public", "data", "convidados");
@@ -20,7 +21,7 @@ const presenteRef = (id) => doc(db, "artifacts", appId, "public", "data", "prese
 const convidadoRef = (id) => doc(db, "artifacts", appId, "public", "data", "convidados", id);
 
 const emptyGift = { nome: "", valor: "", loja: "", linkCompra: "", imagem: "" };
-const emptyGuest = { nome: "", maxAdultos: 2, maxCriancas: 0 };
+const emptyGuest = { nome: "", maxAdultos: 2, maxCriancas: 0, status: GUEST_STATUS.PENDING };
 const emptyPix = { chavePix: "", banco: "", titular: "", mensagem: "" };
 const emptyConvites = {
   mensagemPadrao:
@@ -112,6 +113,32 @@ function formatDateTime(value) {
   return date.toLocaleString("pt-BR");
 }
 
+function getDefaultConfirmedCounts(guest) {
+  const maxAdultos = Number(guest?.maxAdultos || 0);
+  const maxCriancas = Number(guest?.maxCriancas || 0);
+  const adultosConfirmados = Math.min(Math.max(Number(guest?.adultosConfirmados || 0), 0), maxAdultos);
+  const criancasConfirmadas = Math.min(Math.max(Number(guest?.criancasConfirmadas || 0), 0), maxCriancas);
+
+  return {
+    adultosConfirmados: adultosConfirmados > 0 ? adultosConfirmados : (maxAdultos > 0 ? 1 : 0),
+    criancasConfirmadas,
+  };
+}
+
+function getGuestStatusMeta(guest) {
+  const status = normalizeGuestStatus(guest);
+
+  if (status === GUEST_STATUS.CONFIRMED) {
+    return { status, badgeStyle: styles.badgeConfirmed };
+  }
+
+  if (status === GUEST_STATUS.DECLINED) {
+    return { status, badgeStyle: styles.badgeDeclined };
+  }
+
+  return { status, badgeStyle: styles.badgePending };
+}
+
 export default function Admin({ onBack }) {
   const [user, setUser] = useState(null);
   const [loadingAuth, setLoadingAuth] = useState(true);
@@ -163,11 +190,13 @@ export default function Admin({ onBack }) {
   }, [toast]);
 
   const stats = useMemo(() => {
-    const confirmed = convidados.filter((item) => item.status === "Confirmado" || item.confirmado === true);
+    const confirmed = convidados.filter((item) => normalizeGuestStatus(item) === GUEST_STATUS.CONFIRMED);
+    const declined = convidados.filter((item) => normalizeGuestStatus(item) === GUEST_STATUS.DECLINED);
     return {
       gifts: presentes.length,
       guests: convidados.length,
       confirmed: confirmed.length,
+      declined: declined.length,
       people: confirmed.reduce((t, item) => t + Number(item.adultosConfirmados ?? item.adultos ?? 0) + Number(item.criancasConfirmadas ?? item.criancas ?? 0), 0),
     };
   }, [convidados, presentes]);
@@ -175,6 +204,39 @@ export default function Admin({ onBack }) {
   const inviteLink = inviteGuest?.conviteId ? siteUrl(inviteGuest.conviteId) : "";
   const invitePreview = inviteGuest ? buildInviteMessage(convites, inviteGuest) : "";
   const canNativeShare = typeof navigator !== "undefined" && typeof navigator.share === "function";
+
+  const updateGuestStatus = async (guest, nextStatus) => {
+    const normalizedCurrentStatus = normalizeGuestStatus(guest);
+    if (normalizedCurrentStatus === nextStatus) return;
+
+    const now = new Date().toISOString();
+    const confirmedCounts = getDefaultConfirmedCounts(guest);
+    const payload = {
+      status: nextStatus,
+      confirmado: getGuestConfirmedFlag(nextStatus),
+      ultimaAtualizacao: now,
+    };
+
+    if (nextStatus === GUEST_STATUS.CONFIRMED) {
+      payload.adultosConfirmados = confirmedCounts.adultosConfirmados;
+      payload.criancasConfirmadas = confirmedCounts.criancasConfirmadas;
+    }
+
+    if (nextStatus === GUEST_STATUS.PENDING || nextStatus === GUEST_STATUS.DECLINED) {
+      payload.adultosConfirmados = 0;
+      payload.criancasConfirmadas = 0;
+    }
+
+    payload.dataResposta = nextStatus === GUEST_STATUS.PENDING ? null : now;
+
+    try {
+      await updateDoc(convidadoRef(guest.id), payload);
+      setToast(`Status de ${guest.nome} atualizado para ${nextStatus}.`);
+    } catch (error) {
+      console.error(error);
+      window.alert("Nao foi possivel atualizar o status do convidado.");
+    }
+  };
 
   const copyInviteText = async () => {
     if (!invitePreview) return;
@@ -291,15 +353,23 @@ export default function Admin({ onBack }) {
 
   const onSaveGuest = async (event) => {
     event.preventDefault();
+    const guestStatus = guestForm.status || GUEST_STATUS.PENDING;
+    const baseGuest = {
+      maxAdultos: Number(guestForm.maxAdultos) || 0,
+      maxCriancas: Number(guestForm.maxCriancas) || 0,
+    };
+    const confirmedCounts = getDefaultConfirmedCounts(baseGuest);
     try {
       await addDoc(convidadosRef(), {
         nome: guestForm.nome.trim(),
         conviteId: makeInviteId(guestForm.nome),
-        maxAdultos: Number(guestForm.maxAdultos) || 0,
-        maxCriancas: Number(guestForm.maxCriancas) || 0,
-        adultosConfirmados: 0,
-        criancasConfirmadas: 0,
-        status: "Pendente",
+        maxAdultos: baseGuest.maxAdultos,
+        maxCriancas: baseGuest.maxCriancas,
+        adultosConfirmados: guestStatus === GUEST_STATUS.CONFIRMED ? confirmedCounts.adultosConfirmados : 0,
+        criancasConfirmadas: guestStatus === GUEST_STATUS.CONFIRMED ? confirmedCounts.criancasConfirmadas : 0,
+        status: guestStatus,
+        confirmado: getGuestConfirmedFlag(guestStatus),
+        dataResposta: guestStatus === GUEST_STATUS.PENDING ? null : new Date().toISOString(),
         dataCriacao: new Date().toISOString(),
       });
       setGuestForm(emptyGuest);
@@ -483,7 +553,7 @@ export default function Admin({ onBack }) {
       "Max. criancas": Number(item.maxCriancas || 0),
       "Adultos confirmados": Number(item.adultosConfirmados || 0),
       "Criancas confirmadas": Number(item.criancasConfirmadas || 0),
-      Status: item.status || "Pendente",
+      Status: normalizeGuestStatus(item),
       "Data de criacao": formatDateTime(item.dataCriacao),
       "Data de resposta": formatDateTime(item.dataResposta),
     }));
@@ -502,7 +572,7 @@ export default function Admin({ onBack }) {
       item.conviteId || "-",
       `${item.maxAdultos || 0}A / ${item.maxCriancas || 0}C`,
       `${item.adultosConfirmados || 0}A / ${item.criancasConfirmadas || 0}C`,
-      item.status || "Pendente",
+      normalizeGuestStatus(item),
     ]));
 
     exportRowsToPdf({
@@ -571,6 +641,7 @@ export default function Admin({ onBack }) {
           <Metric label="Presentes" value={stats.gifts} />
           <Metric label="Convidados" value={stats.guests} />
           <Metric label="Confirmados" value={stats.confirmed} />
+          <Metric label="Não Comparecerão" value={stats.declined} />
           <Metric label="Pessoas" value={stats.people} />
         </section>
 
@@ -641,7 +712,19 @@ export default function Admin({ onBack }) {
                   <input value={guestForm.nome} onChange={(e) => setGuestForm({ ...guestForm, nome: e.target.value })} placeholder="Nome do Convidado" style={styles.input} required />
                   <input type="number" min="0" value={guestForm.maxAdultos} onChange={(e) => setGuestForm({ ...guestForm, maxAdultos: e.target.value })} placeholder="Lotacao Maxima de Adultos" style={styles.input} required />
                   <input type="number" min="0" value={guestForm.maxCriancas} onChange={(e) => setGuestForm({ ...guestForm, maxCriancas: e.target.value })} placeholder="Lotacao Maxima de Criancas" style={styles.input} required />
-                  <div style={styles.info}>Status inicial: <strong>Pendente</strong></div>
+                  <label style={styles.field}>
+                    <span style={styles.label}>Status inicial</span>
+                    <select
+                      value={guestForm.status}
+                      onChange={(e) => setGuestForm({ ...guestForm, status: e.target.value })}
+                      style={styles.input}
+                    >
+                      <option value={GUEST_STATUS.CONFIRMED}>{GUEST_STATUS.CONFIRMED}</option>
+                      <option value={GUEST_STATUS.DECLINED}>{GUEST_STATUS.DECLINED}</option>
+                      <option value={GUEST_STATUS.PENDING}>{GUEST_STATUS.PENDING}</option>
+                    </select>
+                  </label>
+                  <div style={styles.info}>O status pode ser alterado depois diretamente na tabela de convidados.</div>
                   <button type="submit" style={styles.primaryButton}>Guardar convidado</button>
                 </form>
 
@@ -670,13 +753,29 @@ export default function Admin({ onBack }) {
                     <button type="button" onClick={exportConvidadosAsPdf} style={styles.secondaryButton}>Exportar PDF</button>
                   </div>
                 </div>
-                <Table headers={["Convidado", "Convite ID", "Lotacao", "Status", "Gerar", "Acao"]}>
+                <Table headers={["Convidado", "Convite ID", "Lotacao", "Status", "Atualizar", "Gerar", "Acao"]}>
                   {convidados.map((item) => (
                     <tr key={item.id}>
                       <td style={styles.td}>{item.nome}</td>
                       <td style={styles.td}>{item.conviteId || "A gerar..."}</td>
                       <td style={styles.td}>{item.maxAdultos || 0}A / {item.maxCriancas || 0}C</td>
-                      <td style={styles.td}><span style={item.status === "Confirmado" ? styles.badgeActive : styles.badge}>{item.status || "Pendente"}</span></td>
+                      <td style={styles.td}>
+                        {(() => {
+                          const statusMeta = getGuestStatusMeta(item);
+                          return <span style={statusMeta.badgeStyle}>{statusMeta.status}</span>;
+                        })()}
+                      </td>
+                      <td style={styles.td}>
+                        <select
+                          value={normalizeGuestStatus(item)}
+                          onChange={(event) => updateGuestStatus(item, event.target.value)}
+                          style={styles.inlineSelect}
+                        >
+                          <option value={GUEST_STATUS.CONFIRMED}>{GUEST_STATUS.CONFIRMED}</option>
+                          <option value={GUEST_STATUS.DECLINED}>{GUEST_STATUS.DECLINED}</option>
+                          <option value={GUEST_STATUS.PENDING}>{GUEST_STATUS.PENDING}</option>
+                        </select>
+                      </td>
                       <td style={styles.td}><button type="button" onClick={() => openInvite(item)} style={styles.action}>Gerar Convite</button></td>
                       <td style={styles.td}><button type="button" onClick={() => removeGuest(item.id)} style={styles.action}>Remover</button></td>
                     </tr>
@@ -1721,8 +1820,10 @@ const styles = {
   th: { textAlign: "left", padding: "16px 18px", fontSize: 11, fontWeight: 800, letterSpacing: "0.16em", textTransform: "uppercase", color: "#8f7a4f", borderBottom: "1px solid rgba(196,166,97,0.16)" },
   td: { padding: "16px 18px", fontSize: 14, color: "#3f3650", borderBottom: "1px solid rgba(36,27,47,0.06)", verticalAlign: "top" },
   action: { border: "none", background: "transparent", color: "#312e81", fontWeight: 700, cursor: "pointer" },
-  badge: { display: "inline-flex", padding: "8px 12px", borderRadius: 999, background: "rgba(196,166,97,0.12)", color: "#8f6d37", fontSize: 11, fontWeight: 800, textTransform: "uppercase" },
-  badgeActive: { display: "inline-flex", padding: "8px 12px", borderRadius: 999, background: "rgba(49,46,129,0.12)", color: "#312e81", fontSize: 11, fontWeight: 800, textTransform: "uppercase" },
+  badgePending: { display: "inline-flex", padding: "8px 12px", borderRadius: 999, background: "rgba(245, 158, 11, 0.16)", color: "#b45309", fontSize: 11, fontWeight: 800, textTransform: "uppercase" },
+  badgeConfirmed: { display: "inline-flex", padding: "8px 12px", borderRadius: 999, background: "rgba(34, 197, 94, 0.16)", color: "#166534", fontSize: 11, fontWeight: 800, textTransform: "uppercase" },
+  badgeDeclined: { display: "inline-flex", padding: "8px 12px", borderRadius: 999, background: "rgba(239, 68, 68, 0.12)", color: "#b91c1c", fontSize: 11, fontWeight: 800, textTransform: "uppercase" },
+  inlineSelect: { width: "100%", minWidth: 170, padding: "12px 14px", borderRadius: 14, border: "1px solid rgba(49,46,129,0.12)", background: "#fffefb", color: "#241b2f", fontSize: 13, outline: "none" },
   info: { padding: 16, borderRadius: 18, background: "linear-gradient(140deg, rgba(49,46,129,0.08) 0%, rgba(255,255,255,0.82) 100%)", color: "#5a4c67", lineHeight: 1.6 },
   templateCard: { marginTop: 20, padding: 22, borderRadius: 26, background: "linear-gradient(160deg, rgba(255,253,248,0.96) 0%, rgba(249,241,230,0.96) 100%)", border: "1px solid rgba(196,166,97,0.18)", boxShadow: "0 18px 42px rgba(36,27,47,0.08)" },
   toast: { position: "fixed", bottom: 28, left: "50%", transform: "translateX(-50%)", padding: "14px 18px", borderRadius: 18, background: "#241b2f", color: "#fffaf2", boxShadow: "0 24px 50px rgba(36,27,47,0.22)", zIndex: 80 },

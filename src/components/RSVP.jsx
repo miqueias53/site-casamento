@@ -3,6 +3,7 @@ import { collection, doc, onSnapshot, updateDoc } from "firebase/firestore";
 
 import { appId, db } from "../firebase/firebase.js";
 import { formatRsvpResumo } from "../config/siteConfig.js";
+import { GUEST_STATUS, normalizeGuestStatus } from "../utils/guestStatus.js";
 
 const convidadosRef = () => collection(db, "artifacts", appId, "public", "data", "convidados");
 const convidadoRef = (id) => doc(db, "artifacts", appId, "public", "data", "convidados", id);
@@ -21,6 +22,7 @@ export default function RSVP({ siteConfig }) {
   const [selectedId, setSelectedId] = useState("");
   const [adults, setAdults] = useState(0);
   const [children, setChildren] = useState(0);
+  const [attendanceStatus, setAttendanceStatus] = useState(GUEST_STATUS.CONFIRMED);
   const [status, setStatus] = useState("");
   const [loading, setLoading] = useState(false);
   const safeSiteConfig = useMemo(() => siteConfig ?? {}, [siteConfig]);
@@ -57,12 +59,19 @@ export default function RSVP({ siteConfig }) {
     safeSiteConfig?.rsvpInformacao2,
     safeSiteConfig?.rsvpInformacao3,
   ].filter(Boolean);
+  const currentGuestStatus = selectedGuest ? normalizeGuestStatus(selectedGuest) : GUEST_STATUS.PENDING;
 
   function selectGuest(guest) {
+    const guestStatus = normalizeGuestStatus(guest);
     setSelectedId(guest.id);
     setQuery(guest.nome);
-    setAdults(clamp(guest.adultosConfirmados ?? (guest.maxAdultos > 0 ? 1 : 0), guest.maxAdultos));
-    setChildren(clamp(guest.criancasConfirmadas ?? 0, guest.maxCriancas));
+    setAttendanceStatus(guestStatus === GUEST_STATUS.DECLINED ? GUEST_STATUS.DECLINED : GUEST_STATUS.CONFIRMED);
+    setAdults(
+      guestStatus === GUEST_STATUS.DECLINED
+        ? 0
+        : clamp(guest.adultosConfirmados ?? (guest.maxAdultos > 0 ? 1 : 0), guest.maxAdultos)
+    );
+    setChildren(guestStatus === GUEST_STATUS.DECLINED ? 0 : clamp(guest.criancasConfirmadas ?? 0, guest.maxCriancas));
   }
 
   function handleSearchChange(value) {
@@ -70,12 +79,31 @@ export default function RSVP({ siteConfig }) {
     setStatus("");
     if (selectedGuest && value !== selectedGuest.nome) {
       setSelectedId("");
+      setAttendanceStatus(GUEST_STATUS.CONFIRMED);
+      setAdults(0);
+      setChildren(0);
     }
   }
 
-  async function confirmPresence() {
+  function handleAttendanceChange(value) {
+    setAttendanceStatus(value);
+    setStatus("");
+
+    if (value === GUEST_STATUS.DECLINED) {
+      setAdults(0);
+      setChildren(0);
+      return;
+    }
+
+    if (selectedGuest && adults + children <= 0) {
+      setAdults(clamp(selectedGuest.adultosConfirmados ?? (selectedGuest.maxAdultos > 0 ? 1 : 0), selectedGuest.maxAdultos));
+      setChildren(clamp(selectedGuest.criancasConfirmadas ?? 0, selectedGuest.maxCriancas));
+    }
+  }
+
+  async function submitResponse() {
     if (!selectedGuest) return;
-    if (adults + children <= 0) {
+    if (attendanceStatus === GUEST_STATUS.CONFIRMED && adults + children <= 0) {
       setStatus(safeSiteConfig?.rsvpStatusSelecionePresenca || "Selecione pelo menos uma presença para concluir a confirmação.");
       return;
     }
@@ -85,13 +113,17 @@ export default function RSVP({ siteConfig }) {
 
     try {
       await updateDoc(convidadoRef(selectedGuest.id), {
-        status: "Confirmado",
-        confirmado: true,
-        adultosConfirmados: clamp(adults, selectedGuest.maxAdultos),
-        criancasConfirmadas: clamp(children, selectedGuest.maxCriancas),
+        status: attendanceStatus,
+        confirmado: attendanceStatus === GUEST_STATUS.CONFIRMED,
+        adultosConfirmados: attendanceStatus === GUEST_STATUS.CONFIRMED ? clamp(adults, selectedGuest.maxAdultos) : 0,
+        criancasConfirmadas: attendanceStatus === GUEST_STATUS.CONFIRMED ? clamp(children, selectedGuest.maxCriancas) : 0,
         dataResposta: new Date().toISOString(),
       });
-      setStatus(safeSiteConfig?.rsvpStatusSucesso || "Presença confirmada com sucesso. Obrigado por celebrar este momento connosco.");
+      setStatus(
+        attendanceStatus === GUEST_STATUS.DECLINED
+          ? "Resposta enviada com sucesso. Agradecemos por nos avisar."
+          : safeSiteConfig?.rsvpStatusSucesso || "Presença confirmada com sucesso. Obrigado por celebrar este momento connosco."
+      );
     } catch (error) {
       console.error(error);
       setStatus(
@@ -200,6 +232,31 @@ export default function RSVP({ siteConfig }) {
                 {formatRsvpResumo(safeSiteConfig?.rsvpResumoConvite, selectedGuest)}
               </p>
 
+              <div style={styles.choiceGroup}>
+                <span style={styles.label}>Resposta</span>
+                <div style={styles.choiceList}>
+                  {[GUEST_STATUS.CONFIRMED, GUEST_STATUS.DECLINED].map((option) => (
+                    <label
+                      key={option}
+                      style={{
+                        ...styles.choiceCard,
+                        ...(attendanceStatus === option ? styles.choiceCardActive : {}),
+                      }}
+                    >
+                      <input
+                        type="radio"
+                        name="attendance-status"
+                        value={option}
+                        checked={attendanceStatus === option}
+                        onChange={(event) => handleAttendanceChange(event.target.value)}
+                        style={styles.radioInput}
+                      />
+                      <span>{option === GUEST_STATUS.CONFIRMED ? "Sim, estarei presente" : "Não poderei comparecer"}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
               <div style={styles.grid}>
                 <label style={styles.field}>
                   <span style={styles.label}>{safeSiteConfig?.rsvpAdultosLabel || "Quantos adultos vão?"}</span>
@@ -209,6 +266,7 @@ export default function RSVP({ siteConfig }) {
                     max={selectedGuest.maxAdultos || 0}
                     value={adults}
                     onChange={(event) => setAdults(clamp(event.target.value, selectedGuest.maxAdultos))}
+                    disabled={attendanceStatus === GUEST_STATUS.DECLINED}
                     style={styles.input}
                   />
                 </label>
@@ -221,21 +279,18 @@ export default function RSVP({ siteConfig }) {
                     max={selectedGuest.maxCriancas || 0}
                     value={children}
                     onChange={(event) => setChildren(clamp(event.target.value, selectedGuest.maxCriancas))}
+                    disabled={attendanceStatus === GUEST_STATUS.DECLINED}
                     style={styles.input}
                   />
                 </label>
               </div>
 
               <div style={styles.info}>
-                {safeSiteConfig?.rsvpEstadoLabel || "Estado atual"}: <strong>{selectedGuest.status || "Pendente"}</strong>
+                {safeSiteConfig?.rsvpEstadoLabel || "Estado atual"}: <strong>{currentGuestStatus}</strong>
               </div>
 
-              <button type="button" onClick={confirmPresence} disabled={loading} style={styles.primaryButton}>
-                {loading
-                  ? "A confirmar..."
-                  : selectedGuest.status === "Confirmado"
-                    ? safeSiteConfig?.rsvpBotaoAtualizar || "Atualizar confirmação"
-                    : safeSiteConfig?.rsvpBotaoConfirmar || "Confirmar Presença"}
+              <button type="button" onClick={submitResponse} disabled={loading} style={styles.primaryButton}>
+                {loading ? "A enviar..." : "Enviar Resposta"}
               </button>
             </div>
           )}
@@ -287,6 +342,11 @@ const styles = {
   grid: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 },
   field: { display: "grid", gap: 8 },
   label: { fontSize: 11, fontWeight: 800, letterSpacing: "0.16em", textTransform: "uppercase", color: "#8f7a4f" },
+  choiceGroup: { display: "grid", gap: 10 },
+  choiceList: { display: "grid", gap: 10 },
+  choiceCard: { display: "flex", alignItems: "center", gap: 12, padding: "16px 18px", borderRadius: 18, border: "1px solid rgba(49,46,129,0.12)", background: "#fffefb", color: "#241b2f", fontWeight: 600, cursor: "pointer" },
+  choiceCardActive: { border: "1px solid rgba(196,166,97,0.42)", background: "rgba(196,166,97,0.12)", boxShadow: "0 16px 30px rgba(36,27,47,0.06)" },
+  radioInput: { accentColor: "#a88642", width: 18, height: 18, flexShrink: 0 },
   info: { padding: 16, borderRadius: 18, background: "rgba(49,46,129,0.06)", color: "#4b3f5d" },
   primaryButton: { padding: "18px 22px", borderRadius: 20, border: "1px solid rgba(196,166,97,0.28)", background: "linear-gradient(135deg, #c4a661 0%, #a88642 100%)", color: "#241b2f", fontSize: 12, fontWeight: 900, letterSpacing: "0.16em", textTransform: "uppercase", cursor: "pointer" },
   status: { marginTop: 18, padding: "14px 16px", borderRadius: 18, background: "rgba(49,46,129,0.08)", color: "#312e81", fontWeight: 700 },
