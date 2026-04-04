@@ -153,6 +153,8 @@ export default function Admin({ onBack }) {
   const [imagens, setImagens] = useState(emptyImageConfig);
   const [giftForm, setGiftForm] = useState(emptyGift);
   const [guestForm, setGuestForm] = useState(emptyGuest);
+  const [buscaConvidado, setBuscaConvidado] = useState("");
+  const [buscaPresente, setBuscaPresente] = useState("");
   const [inviteGuest, setInviteGuest] = useState(null);
   const [showInviteTemplate, setShowInviteTemplate] = useState(false);
   const [shareBusy, setShareBusy] = useState(false);
@@ -200,6 +202,23 @@ export default function Admin({ onBack }) {
       people: confirmed.reduce((t, item) => t + Number(item.adultosConfirmados ?? item.adultos ?? 0) + Number(item.criancasConfirmadas ?? item.criancas ?? 0), 0),
     };
   }, [convidados, presentes]);
+
+  const convidadosFiltrados = useMemo(() => {
+    const termo = buscaConvidado.trim().toLowerCase();
+    if (!termo) return convidados;
+    return convidados.filter((item) => item.nome?.toLowerCase().includes(termo));
+  }, [buscaConvidado, convidados]);
+
+  const presentesFiltrados = useMemo(() => {
+    const termo = buscaPresente.trim().toLowerCase();
+    if (!termo) return presentes;
+
+    return presentes.filter((item) => {
+      const nome = item.nome?.toLowerCase() || "";
+      const loja = (item.loja || item.lojaNome || "").toLowerCase();
+      return nome.includes(termo) || loja.includes(termo);
+    });
+  }, [buscaPresente, presentes]);
 
   const inviteLink = inviteGuest?.conviteId ? siteUrl(inviteGuest.conviteId) : "";
   const invitePreview = inviteGuest ? buildInviteMessage(convites, inviteGuest) : "";
@@ -680,8 +699,15 @@ export default function Admin({ onBack }) {
                     <button type="button" onClick={exportPresentesAsPdf} style={styles.secondaryButton}>Exportar PDF</button>
                   </div>
                 </div>
-                <Table headers={["Presente", "Loja", "Valor", "Estado", "Ação"]}>
-                  {presentes.map((item) => (
+                <input
+                  type="text"
+                  value={buscaPresente}
+                  onChange={(event) => setBuscaPresente(event.target.value)}
+                  placeholder="Pesquisar presente ou loja..."
+                  className="mb-5 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 md:w-1/3"
+                />
+                <Table headers={["Presente", "Loja", "Valor", "Estado", "A??o"]}>
+                  {presentesFiltrados.length > 0 ? presentesFiltrados.map((item) => (
                     <tr key={item.id}>
                       <td style={styles.td}>{item.nome}</td>
                       <td style={styles.td}>{item.loja || item.lojaNome || "Manual"}</td>
@@ -689,7 +715,11 @@ export default function Admin({ onBack }) {
                       <td style={styles.td}>{item.reservado ? `Reservado por ${item.reservadoPor || "convidado"}` : "Disponível"}</td>
                       <td style={styles.td}><button type="button" onClick={() => removeGift(item.id)} style={styles.action}>Remover</button></td>
                     </tr>
-                  ))}
+                  )) : (
+                    <tr>
+                      <td colSpan="5" style={styles.emptyTableState}>Nenhum resultado encontrado para a sua pesquisa.</td>
+                    </tr>
+                  )}
                 </Table>
               </div>
             </div>
@@ -753,33 +783,46 @@ export default function Admin({ onBack }) {
                     <button type="button" onClick={exportConvidadosAsPdf} style={styles.secondaryButton}>Exportar PDF</button>
                   </div>
                 </div>
+                <input
+                  type="text"
+                  value={buscaConvidado}
+                  onChange={(event) => setBuscaConvidado(event.target.value)}
+                  placeholder="Pesquisar convidado por nome..."
+                  className="mb-5 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 md:w-1/3"
+                />
                 <Table headers={["Convidado", "Convite ID", "Lotacao", "Status", "Atualizar", "Gerar", "Acao"]}>
-                  {convidados.map((item) => (
-                    <tr key={item.id}>
-                      <td style={styles.td}>{item.nome}</td>
-                      <td style={styles.td}>{item.conviteId || "A gerar..."}</td>
-                      <td style={styles.td}>{item.maxAdultos || 0}A / {item.maxCriancas || 0}C</td>
-                      <td style={styles.td}>
-                        {(() => {
-                          const statusMeta = getGuestStatusMeta(item);
-                          return <span style={statusMeta.badgeStyle}>{statusMeta.status}</span>;
-                        })()}
-                      </td>
-                      <td style={styles.td}>
-                        <select
-                          value={normalizeGuestStatus(item)}
-                          onChange={(event) => updateGuestStatus(item, event.target.value)}
-                          style={styles.inlineSelect}
-                        >
-                          <option value={GUEST_STATUS.CONFIRMED}>{GUEST_STATUS.CONFIRMED}</option>
-                          <option value={GUEST_STATUS.DECLINED}>{GUEST_STATUS.DECLINED}</option>
-                          <option value={GUEST_STATUS.PENDING}>{GUEST_STATUS.PENDING}</option>
-                        </select>
-                      </td>
-                      <td style={styles.td}><button type="button" onClick={() => openInvite(item)} style={styles.action}>Gerar Convite</button></td>
-                      <td style={styles.td}><button type="button" onClick={() => removeGuest(item.id)} style={styles.action}>Remover</button></td>
+                  {convidadosFiltrados.length > 0 ? (
+                    convidadosFiltrados.map((item) => (
+                      <tr key={item.id}>
+                        <td style={styles.td}>{item.nome}</td>
+                        <td style={styles.td}>{item.conviteId || "A gerar..."}</td>
+                        <td style={styles.td}>{item.maxAdultos || 0}A / {item.maxCriancas || 0}C</td>
+                        <td style={styles.td}>
+                          {(() => {
+                            const statusMeta = getGuestStatusMeta(item);
+                            return <span style={statusMeta.badgeStyle}>{statusMeta.status}</span>;
+                          })()}
+                        </td>
+                        <td style={styles.td}>
+                          <select
+                            value={normalizeGuestStatus(item)}
+                            onChange={(event) => updateGuestStatus(item, event.target.value)}
+                            style={styles.inlineSelect}
+                          >
+                            <option value={GUEST_STATUS.CONFIRMED}>{GUEST_STATUS.CONFIRMED}</option>
+                            <option value={GUEST_STATUS.DECLINED}>{GUEST_STATUS.DECLINED}</option>
+                            <option value={GUEST_STATUS.PENDING}>{GUEST_STATUS.PENDING}</option>
+                          </select>
+                        </td>
+                        <td style={styles.td}><button type="button" onClick={() => openInvite(item)} style={styles.action}>Gerar Convite</button></td>
+                        <td style={styles.td}><button type="button" onClick={() => removeGuest(item.id)} style={styles.action}>Remover</button></td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan="7" style={styles.emptyTableState}>Nenhum resultado encontrado para a sua pesquisa.</td>
                     </tr>
-                  ))}
+                  )}
                 </Table>
               </div>
             </div>
@@ -1824,6 +1867,7 @@ const styles = {
   badgeConfirmed: { display: "inline-flex", padding: "8px 12px", borderRadius: 999, background: "rgba(34, 197, 94, 0.16)", color: "#166534", fontSize: 11, fontWeight: 800, textTransform: "uppercase" },
   badgeDeclined: { display: "inline-flex", padding: "8px 12px", borderRadius: 999, background: "rgba(239, 68, 68, 0.12)", color: "#b91c1c", fontSize: 11, fontWeight: 800, textTransform: "uppercase" },
   inlineSelect: { width: "100%", minWidth: 170, padding: "12px 14px", borderRadius: 14, border: "1px solid rgba(49,46,129,0.12)", background: "#fffefb", color: "#241b2f", fontSize: 13, outline: "none" },
+  emptyTableState: { padding: "24px 18px", textAlign: "center", color: "#5a4c67", fontStyle: "italic" },
   info: { padding: 16, borderRadius: 18, background: "linear-gradient(140deg, rgba(49,46,129,0.08) 0%, rgba(255,255,255,0.82) 100%)", color: "#5a4c67", lineHeight: 1.6 },
   templateCard: { marginTop: 20, padding: 22, borderRadius: 26, background: "linear-gradient(160deg, rgba(255,253,248,0.96) 0%, rgba(249,241,230,0.96) 100%)", border: "1px solid rgba(196,166,97,0.18)", boxShadow: "0 18px 42px rgba(36,27,47,0.08)" },
   toast: { position: "fixed", bottom: 28, left: "50%", transform: "translateX(-50%)", padding: "14px 18px", borderRadius: 18, background: "#241b2f", color: "#fffaf2", boxShadow: "0 24px 50px rgba(36,27,47,0.22)", zIndex: 80 },

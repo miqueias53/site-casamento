@@ -1,35 +1,41 @@
-# ARQUITETURA
+ARQUITETURA
+1. Visão Geral do Sistema
+Este projeto é um site público de casamento com um painel administrativo embutido na mesma aplicação React. A aplicação funciona como um CMS headless simplificado sobre Firebase: quase todo o conteúdo, a visibilidade de seções, tipografia, imagens, PIX, RSVP, modal de entrega e templates de convite são persistidos no Firestore e observados em tempo real com onSnapshot(...).
 
-## 1. VISÃO GERAL DO SISTEMA
+A base atual já incorpora as evoluções mais recentes:
 
-Este projeto é um site público de casamento com painel administrativo embutido na mesma aplicação React. A aplicação funciona como um CMS headless simplificado: o conteúdo, a visibilidade das secções, as imagens, a tipografia, o PIX, o modal de entrega e o template de convites são persistidos no Firestore; o frontend público apenas observa esses documentos e rendeiriza a experiência em tempo real.
+suporte a RSVP com estados Confirmado, Não Comparecerá e Pendente
+utilitário central de status em src/utils/guestStatus.js
+correção do FOUC / flash de carregamento no src/App.jsx
+uso de whitespace-pre-line em componentes públicos para respeitar quebras de linha salvas no CMS
+modal de entrega expandido em src/components/Presentes.jsx, com botão Copiar Endereço
+pesquisa em tempo real no src/pages/Admin.jsx para listas de convidados e presentes
+Stack real encontrada no código
+React 18.3.1
+Vite 8
+Tailwind CSS v4
+Firebase Auth
+Firebase Firestore
+xlsx
+jspdf
+jspdf-autotable
+Dependência instalada mas não usada de forma relevante no fluxo atual:
 
-### Stack real encontrada no código
-
-- `React 18.3.1`
-- `Vite 8`
-- `Tailwind CSS v4` via `@import "tailwindcss"` em `src/index.css`
-- `Firebase Auth` para acesso ao painel admin
-- `Firebase Firestore` para estado persistente
-- `xlsx` para exportação Excel
-- `jspdf` + `jspdf-autotable` para exportação PDF
-- Dependência instalada mas não utilizada na aplicação atual: `react-router-dom`
-
-### Topologia da app
-
-```text
+react-router-dom
+Topologia da aplicação
 src/
   App.jsx
   main.jsx
   index.css
+  App.css
   firebase/
     firebase.js
+  providers/
+    TypographyProvider.jsx
   config/
     siteConfig.js
     siteImages.js
     deliveryConfig.js
-  providers/
-    TypographyProvider.jsx
   pages/
     Admin.jsx
     Home.jsx
@@ -47,245 +53,127 @@ src/
     FadeInSection.jsx
   services/
     config.js
-    presentes.js
     convidados.js
+    presentes.js
   utils/
     adminExport.js
-```
+    guestStatus.js
+docs/
+  ARQUITETURA.md
+Papel de cada núcleo
+src/App.jsx
+Orquestra a app inteira. Decide entre vista pública e admin, observa o conteúdo principal e imagens do Firestore, resolve o boot inicial e controla o hash #admin.
 
-### Papel de cada núcleo
+src/pages/Admin.jsx
+Painel monolítico de gestão. Autentica utilizadores, observa múltiplos documentos do Firestore, mantém formulários administrativos, exporta dados, gere convites e agora também aplica filtros de pesquisa em tempo real.
 
-- `src/App.jsx`: orquestrador principal. Decide entre visão pública e admin, observa `config/conteudo` e `config/imagens`, controla hash `#admin` e monta a página pública por secções.
-- `src/pages/Admin.jsx`: painel de gestão manual. Faz autenticação, mantém listeners Firestore, salva documentos de configuração e exporta listas.
-- `src/providers/TypographyProvider.jsx`: observa `config/tipografia`, injeta Google Fonts dinamicamente e escreve variáveis CSS em `:root`.
-- `src/config/siteConfig.js`: contrato central do CMS público. Mistura conteúdo editorial, toggles de visibilidade e cores de fundo.
-- `src/components/*`: componentes públicos consumindo `siteConfig`, `siteImages`, `pix`, `entrega` e `convidados`.
-- `src/utils/adminExport.js`: módulo isolado de exportação para Excel e PDF.
+src/providers/TypographyProvider.jsx
+Observa config/tipografia, injeta Google Fonts dinamicamente e aplica variáveis CSS globais em :root.
 
-### Arquitetura funcional
+src/config/siteConfig.js
+Define o schema de facto do CMS público: textos, toggles, labels, cores de fundo e vários conteúdos configuráveis.
 
-- O frontend público não tem roteamento formal; alterna entre `public` e `admin` através de `window.location.hash`.
-- O estado principal do site não é buscado via REST nem via server actions; é lido com `onSnapshot`, o que dá comportamento reativo quase em tempo real.
-- O painel admin e o site público partilham a mesma base de código e o mesmo bundle.
-- O padrão predominante de UI é híbrido:
-  - site público: `inline styles` com valores dinâmicos vindos do Firestore;
-  - painel admin: classes Tailwind v4 combinadas com alguns objetos `styles` inline legados.
+src/config/siteImages.js
+Resolve imagens configuráveis, fallbacks e mistura de fontes visuais.
 
-### Artefactos órfãos ou subutilizados
+src/config/deliveryConfig.js
+Define o contrato default do modal de entrega da loja.
 
-- `src/pages/Home.jsx` está vazio.
-- `src/components/FadeInSection.jsx` existe, mas não há referências a ele no resto de `src/`.
-- `src/services/*.js` encapsulam Firestore, mas o painel e alguns componentes também acedem Firestore diretamente, criando duas camadas de acesso coexistentes.
+src/components/*
+Representam o frontend público. Vários componentes consomem dados do Firestore via props vindas do App, e alguns componentes também observam Firestore diretamente.
 
-## 2. REGRAS DE NEGÓCIO
+src/utils/adminExport.js
+Isola a exportação para XLSX e PDF.
 
-### Sistema de presentes
+src/utils/guestStatus.js
+Novo módulo de normalização de estados de RSVP, criado para manter compatibilidade com convidados antigos e reduzir duplicação de lógica entre frontend público e admin.
 
-O catálogo de presentes é lido da coleção `presentes`. Cada presente pode estar disponível ou reservado.
+Arquitetura funcional atual
+A aplicação não usa roteamento formal para separar público e admin.
+A troca de contexto acontece por window.location.hash:
+#admin para o painel
+ausência de #admin para o site público
+O sistema inteiro depende de sincronização reativa com Firestore.
+O frontend público usa majoritariamente inline styles combinados com conteúdo vindo do CMS.
+O painel admin usa uma mistura de:
+classes Tailwind v4
+componentes internos
+styles inline legados
+2. Modelo de Dados e Firebase
+Firebase e caminho base
+Em src/firebase/firebase.js, a aplicação expõe:
 
-### Estado do presente
+db
+auth
+appId = "casamento-miqueias"
+Todos os dados observados e persistidos são ancorados em:
 
-- Um item é tratado como indisponível no frontend quando `Boolean(gift?.reservado)` é verdadeiro em `src/components/Presentes.jsx`.
-- Quando indisponível:
-  - aparece o badge `"Já reservado"`;
-  - o botão usa `styles.disabledButtonCompact`;
-  - o CTA muda para `safeSiteConfig?.presentesBotaoIndisponivel || "Indisponível"`;
-  - o clique para abrir o modal deixa de estar disponível porque o botão fica `disabled`.
-
-### Estado inicial ao criar presente
-
-Ao criar um presente no admin, `onSaveGift` grava:
-
-- `reservado: false`
-- `reservadoPor: null`
-- `dataCriacao: new Date().toISOString()`
-- `lojaNome: giftForm.loja.trim()`
-
-Além dos campos do formulário:
-
-- `nome`
-- `valor`
-- `loja`
-- `linkCompra`
-- `imagem`
-
-### Regras de reserva por transação
-
-Existe uma implementação transacional em `src/services/presentes.js` via `reservarPresenteTransacao(id, nomeConvidado)`.
-
-- A função usa `runTransaction(db, async (transaction) => ...)`.
-- Se o documento não existir, lança `"Item inexistente no sistema."`.
-- Se `presenteDoc.data().reservado === true`, lança `"Este item já foi reservado por outra pessoa."`.
-- Em caso de sucesso, atualiza:
-  - `reservado: true`
-  - `reservadoPor: nomeConvidado`
-  - `dataReserva: new Date().toISOString()`
-
-Observação importante: essa função existe, mas o fluxo atualmente usado pelo componente `Presentes.jsx` não faz reserva automática. O componente apenas abre o modal e, se houver `linkCompra`, encaminha para a loja. Portanto, a compra e a marcação de reserva não estão acopladas no frontend público atual.
-
-### Modal de Entrega
-
-O modal de entrega é um interceptador obrigatório antes de abrir a loja de um presente.
-
-Fluxo em `src/components/Presentes.jsx`:
-
-- clicar em `"Comprar presente"` executa `setSelectedGift(gift)`;
-- quando `selectedGift` existe, é aberto um overlay `className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-5"`;
-- o modal lê conteúdo do documento `config/entrega`, normalizado por `normalizeDeliveryConfig()`;
-- o botão de continuar chama `continueToStore()`;
-- `continueToStore()`:
-  - impede continuação se `selectedGift?.linkCompra` estiver vazio;
-  - mostra toast `"Este presente ainda não possui link de loja."`;
-  - caso exista link, faz `window.open(selectedGift.linkCompra, "_blank", "noopener,noreferrer")` e fecha o modal.
-
-### Dados editáveis do modal
-
-O admin grava em `config/entrega` os campos:
-
-- `titulo`
-- `mensagem`
-- `endereco`
-- `botaoCancelar`
-- `botaoContinuar`
-- `ultimaAtualizacao`
-
-### Toggles de visibilidade
-
-Os toggles do site vivem em `siteConfig` e são processados por `getSectionVisibility(config)` em `src/config/siteConfig.js`.
-
-Regras:
-
-- `mostrarHero !== false`
-- `mostrarContagem !== false`
-- `mostrarHistoria !== false`
-- `mostrarLocal !== false`
-- `mostrarRSVP !== false`
-- `mostrarPresentes !== false`
-- `mostrarBlocoExtra === true`
-- `mostrarGaleriaPos === true`
-
-Implicação prática:
-
-- Hero, Contagem, História, Local, RSVP e Presentes são opt-out.
-- Bloco Extra e Galeria Pós-Casamento são opt-in.
-
-Em `src/App.jsx`, `publicSections` é montado por esta ordem:
-
-1. `hero`
-2. `contagem`
-3. `historia`
-4. `local`
-5. `rsvp`
-6. `presentes`
-7. `bloco-extra`
-8. `galeria-pos`
-
-Se uma secção estiver desativada, ela simplesmente não entra no array e não é renderizada.
-
-## 3. ARQUITETURA DE ESTADO E DADOS
-
-### Firebase e caminhos reais
-
-Configuração Firebase em `src/firebase/firebase.js`:
-
-- app inicializada com `initializeApp(firebaseConfig)` ou reaproveitada com `getApp()`;
-- Firestore exposto como `db`;
-- Auth exposto como `auth`;
-- identificador lógico do artefacto: `appId = "casamento-miqueias"`.
-
-Todos os caminhos persistidos são ancorados em:
-
-```text
 artifacts/casamento-miqueias/public/data
-```
-
-### Documentos e coleções observados no runtime
-
+Coleções e documentos reais
 Coleções:
 
-- `artifacts/casamento-miqueias/public/data/presentes`
-- `artifacts/casamento-miqueias/public/data/convidados`
-
+artifacts/casamento-miqueias/public/data/presentes
+artifacts/casamento-miqueias/public/data/convidados
 Documentos de configuração:
 
-- `artifacts/casamento-miqueias/public/data/config/pix`
-- `artifacts/casamento-miqueias/public/data/config/conteudo`
-- `artifacts/casamento-miqueias/public/data/config/entrega`
-- `artifacts/casamento-miqueias/public/data/config/convites`
-- `artifacts/casamento-miqueias/public/data/config/tipografia`
-- `artifacts/casamento-miqueias/public/data/config/imagens`
+artifacts/casamento-miqueias/public/data/config/pix
+artifacts/casamento-miqueias/public/data/config/conteudo
+artifacts/casamento-miqueias/public/data/config/entrega
+artifacts/casamento-miqueias/public/data/config/convites
+artifacts/casamento-miqueias/public/data/config/tipografia
+artifacts/casamento-miqueias/public/data/config/imagens
+Estratégia de sincronização
+O padrão dominante é onSnapshot(...), usado em:
 
-### Modelo de sincronização
+src/App.jsx
 
-O padrão dominante é `onSnapshot(...)`.
+conteudoRef()
+imagensRef()
+src/providers/TypographyProvider.jsx
 
-Pontos de escuta:
+tipografiaRef()
+src/pages/Admin.jsx
 
-- `src/App.jsx`
-  - `conteudoRef()` para `siteConfig`
-  - `imagensRef()` para `siteImages`
-- `src/providers/TypographyProvider.jsx`
-  - `tipografiaRef()` para tipografia global
-- `src/pages/Admin.jsx`
-  - `presentesRef()`
-  - `convidadosRef()`
-  - `pixRef()`
-  - `conteudoRef()`
-  - `entregaRef()`
-  - `convitesRef()`
-  - `tipografiaRef()`
-  - `imagensRef()`
-- `src/components/Presentes.jsx`
-  - `presentesRef()`
-  - `pixRef()`
-  - `entregaRef()`
-- `src/components/RSVP.jsx`
-  - `convidadosRef()`
+presentesRef()
+convidadosRef()
+pixRef()
+conteudoRef()
+entregaRef()
+convitesRef()
+tipografiaRef()
+imagensRef()
+src/components/Presentes.jsx
 
-Consequência arquitetural:
+presentesRef()
+pixRef()
+entregaRef()
+src/components/RSVP.jsx
 
-- o painel e o site público convergem sobre o mesmo backend reativo;
-- alterações no painel são refletidas sem refresh total;
-- não existe camada intermediária de API própria.
+convidadosRef()
+Consequência prática:
 
-### Fallbacks de segurança
+o painel admin e o site público convergem sobre o mesmo backend reativo
+alterações feitas no admin refletem-se no frontend sem refresh total
+não existe backend intermediário próprio
+Padrões de hardening de dados
+O projeto usa três mecanismos consistentes:
 
-O código usa três mecanismos principais de hardening:
+Funções de normalização
+normalizeSiteConfig(data)
+normalizeDeliveryConfig(data)
+mergeImageConfig(data)
+mergeTypography(data)
+normalizeGuestStatus(guest)
+Fallbacks com ||
+ex.: safeSiteConfig?.rsvpTitulo || "RSVP personalizado"
+snapshot.exists() ? ... : fallback
+ex.: snapshot.exists() ? normalizeSiteConfig(snapshot.data()) : defaultSiteConfig
+3. Schema Atual do Firestore
+config/conteudo
+src/config/siteConfig.js define defaultSiteConfig, que hoje funciona como schema central do CMS.
 
-1. `normalize*`
+Campos observados no runtime:
 
-- `normalizeSiteConfig(data)`
-- `normalizeDeliveryConfig(data)`
-- `mergeImageConfig(data)`
-- `mergeTypography(data)`
-
-Essas funções fazem merge de defaults estáticos com dados incompletos vindos do Firestore.
-
-2. Optional chaining e OR lógico
-
-Exemplos recorrentes:
-
-- `siteConfig?.localTitulo || defaultLocal.titulo`
-- `safeSiteConfig?.presentesTitulo || "Presentes e contribuições"`
-- `safeSiteConfig?.corFundoGlobal?.trim() || "#fffdf8"`
-
-3. `snapshot.exists() ? ... : fallback`
-
-Exemplos:
-
-- `snapshot.exists() ? normalizeSiteConfig(snapshot.data()) : defaultSiteConfig`
-- `snapshot.exists() ? mergeImageConfig(snapshot.data()) : emptyImageConfig`
-- `snapshot.exists() ? normalizeDeliveryConfig(snapshot.data()) : emptyEntrega`
-
-### Estrutura de dados exata esperada pelo Firestore
-
-#### `config/conteudo`
-
-Documento central do CMS. É o contrato mais importante da app.
-
-Campos observados em `defaultSiteConfig` e componentes:
-
-```text
 titulosFontFamily
 titulosFontSize
 titulosFontWeight
@@ -298,6 +186,7 @@ dataFontWeight
 heroTitulo
 heroData
 heroTituloFontSize
+
 corFundoGlobal
 corFundoRSVP
 corFundoLocalArea
@@ -305,6 +194,7 @@ corFundoContagemArea
 corFundoContagemCards
 corFundoPix
 corFundoFooter
+
 mostrarHero
 mostrarContagem
 mostrarHistoria
@@ -313,6 +203,7 @@ mostrarRSVP
 mostrarPresentes
 mostrarBlocoExtra
 mostrarGaleriaPos
+
 historiaTitulo
 historiaDescricao
 historiaCardBackgroundColor
@@ -325,6 +216,7 @@ historiaCard2Imagem
 historiaCard3Titulo
 historiaCard3Texto
 historiaCard3Imagem
+
 localTitulo
 localData
 localHora
@@ -333,6 +225,7 @@ localEndereco
 localMapsLink
 localMapsButtonLabel
 localCardBackgroundColor
+
 rsvpEyebrow
 rsvpTitulo
 rsvpDescricao
@@ -358,6 +251,7 @@ rsvpCriancasLabel
 rsvpEstadoLabel
 rsvpBotaoConfirmar
 rsvpBotaoAtualizar
+
 presentesEyebrow
 presentesTitulo
 presentesDescricao
@@ -368,98 +262,84 @@ presentesVazioTexto
 presentesBotaoLoja
 presentesBotaoComprar
 presentesBotaoIndisponivel
+
 blocoExtraEyebrow
 blocoExtraTitulo
 blocoExtraTexto
 blocoExtraImagem
+
 galeriaImagem1
 galeriaImagem2
 galeriaImagem3
 galeriaPosEyebrow
 galeriaPosTitulo
 galeriaPosDescricao
+
 versiculoTexto
 versiculoFontSize
 versiculoColor
-ultimaAtualizacao
-```
+Observação importante:
 
-Observações:
+O suporte a RSVP com Não Comparecerá foi adicionado no fluxo, mas os textos do CMS ainda continuam majoritariamente estruturados em torno de confirmação tradicional. O novo estado é tratado na lógica do componente, não por novos campos de conteúdo.
+config/pix
+Campos:
 
-- `presentesBotaoLoja` existe em `defaultSiteConfig`, mas não foi encontrado em uso nos componentes atuais.
-- `blocoExtraImagem`, `galeriaImagem1`, `galeriaImagem2` e `galeriaImagem3` coexistem com `config/imagens`; os componentes normalmente tentam primeiro `siteImages`, depois `siteConfig`.
-
-#### `config/pix`
-
-Campos lidos e escritos:
-
-```text
 chavePix
 banco
 titular
 mensagem
 ultimaAtualizacao
-```
-
-#### `config/entrega`
+config/entrega
+Definido em src/config/deliveryConfig.js com defaultDeliveryConfig.
 
 Campos:
 
-```text
 titulo
 mensagem
 endereco
 botaoCancelar
 botaoContinuar
 ultimaAtualizacao
-```
+Esse documento passou a ter maior relevância após a expansão do modal de entrega e da adição do botão Copiar Endereço.
 
-#### `config/convites`
-
+config/convites
 Campos:
 
-```text
 mensagemPadrao
 urlCartaz
 ultimaAtualizacao
-```
+Placeholders suportados por buildInviteMessage(template, guest) em src/pages/Admin.jsx:
 
-`mensagemPadrao` suporta placeholders literais:
+[NOME]
+[LINK]
+config/tipografia
+Estrutura atual:
 
-- `[NOME]`
-- `[LINK]`
-
-#### `config/tipografia`
-
-Estrutura esperada:
-
-```text
 titulos.fontFamily
 titulos.color
 titulos.fontSize
 titulos.fontWeight
 titulos.lineHeight
 titulos.letterSpacing
+
 textos.fontFamily
 textos.color
 textos.fontSize
 textos.fontWeight
 textos.lineHeight
 textos.letterSpacing
+
 destaques.fontFamily
 destaques.color
 destaques.fontSize
 destaques.fontWeight
 destaques.lineHeight
 destaques.letterSpacing
+
 ultimaAtualizacao
-```
+config/imagens
+Campos operacionais:
 
-#### `config/imagens`
-
-Campos:
-
-```text
 heroBanner
 historiaCard1
 historiaCard2
@@ -470,13 +350,9 @@ galeriaImagem2
 galeriaImagem3
 rodapeBackground
 ultimaAtualizacao
-```
+Coleção presentes
+Campos encontrados:
 
-#### Coleção `presentes`
-
-Campos lidos e/ou escritos no código:
-
-```text
 nome
 valor
 loja
@@ -487,13 +363,9 @@ reservado
 reservadoPor
 dataCriacao
 dataReserva
-```
+Coleção convidados
+Campos encontrados:
 
-#### Coleção `convidados`
-
-Campos lidos e/ou escritos no código:
-
-```text
 nome
 conviteId
 maxAdultos
@@ -506,63 +378,482 @@ dataCriacao
 dataResposta
 dataRegisto
 ultimaAtualizacao
-```
+Observação relevante:
 
-Observação importante:
+coexistem dois modelos históricos:
+modelo de lista fechada atual, baseado em conviteId, limites e atualização com updateDoc
+modelo legado acessível por src/services/convidados.js, que ainda expõe registrarPresenca(dados) e grava dataRegisto
+4. Sistema de Status de Convidados
+Novo módulo central: src/utils/guestStatus.js
+Este ficheiro foi introduzido para resolver dois problemas arquiteturais:
 
-- `src/pages/Admin.jsx` cria convidados no formato de lista fechada, com `conviteId`, limites e confirmação estruturada.
-- `src/services/convidados.js` mantém uma função `registrarPresenca(dados)` que grava `dataRegisto`, mas esse fluxo não é o principal do RSVP atual. O componente `RSVP.jsx` trabalha sobre documentos já existentes e atualiza o mesmo documento com `updateDoc`.
+compatibilidade com convidados antigos que não tinham status explícito
+unificação da lógica entre RSVP.jsx e Admin.jsx
+Constantes exportadas
+export const GUEST_STATUS = {
+  CONFIRMED: "Confirmado",
+  DECLINED: "Não Comparecerá",
+  PENDING: "Pendente",
+};
+normalizeGuestStatus(guest)
+A função:
 
-## 4. FLUXO DE RENDERIZAÇÃO E UI
+normaliza texto com normalize("NFD")
+remove diacríticos
+converte para lowercase
+aceita variações legadas como:
+"confirmado"
+"confirmada"
+"nao comparecera"
+"nao comparecerao"
+"nao podera comparecer"
+"ausente"
+"ausentes"
+"recusado"
+"declined"
+"pendente"
+"pending"
+Fallbacks importantes:
 
-### Bootstrapping da aplicação
+se guest.confirmado === true, devolve Confirmado
+se guest.confirmado === false, devolve Não Comparecerá
+se nada estiver consistente, devolve Pendente
+Isto garante retrocompatibilidade com registos antigos.
 
-`src/main.jsx` monta `App` dentro de `React.StrictMode`.
+getGuestConfirmedFlag(status)
+Mapeia o status textual de volta para o booleano persistido:
 
-`src/App.jsx` controla:
+Confirmado -> true
+Não Comparecerá -> false
+Pendente -> null
+Esse helper é usado no admin para manter o campo booleano confirmado coerente com o campo textual status.
 
-- `view`: `"public"` ou `"admin"`
-- `siteConfig`
-- `siteImages`
-- `contentReady`
-- `imagesReady`
+5. Fluxo Público
+src/App.jsx
+Função principal
+O App atual controla:
 
-### Seleção entre público e admin
+view
+siteConfig
+siteImages
+contentReady
+imagesReady
+isFirebaseLoaded
+Resolução do FOUC / flash de carregamento
+Nas últimas alterações, o problema do piscar visual no boot foi tratado com uma estratégia explícita de pré-carregamento visual.
 
-`getInitialView()` devolve:
+Mecanismo atual
+O App mantém dois readiness flags independentes:
 
-- `"admin"` quando `window.location.hash === "#admin"`
-- `"public"` caso contrário
+contentReady
+imagesReady
+Esses flags só são ativados quando os listeners de Firestore retornam com sucesso ou erro tratado:
 
-Há dois efeitos complementares:
+listener de conteudoRef()
+listener de imagensRef()
+Depois disso, um efeito controla:
 
-- um `hashchange` listener para manter o estado sincronizado com a URL;
-- um efeito que força/remova `#admin` quando `view` muda.
+useEffect(() => {
+  if (!contentReady || !imagesReady) return;
+  setIsFirebaseLoaded(true);
+}, [contentReady, imagesReady]);
+Enquanto isFirebaseLoaded for false, o componente renderiza LoadingScreen em vez da PublicPage.
 
-### Renderização pública
+LoadingScreen({ backgroundColor })
+A tela de loading:
 
-A página pública é montada dentro de `PublicPage`.
+aplica diretamente o backgroundColor em document.body.style.background
+aplica também document.body.style.backgroundColor
+restaura o valor anterior no cleanup
+Isto evita que o body apareça momentaneamente com fundo inconsistente antes do conteúdo definitivo ser aplicado.
 
-Ordem de composição:
+loadingBackgroundColor
+Durante o boot, o fundo já tenta respeitar o tema configurado:
 
-- `Navbar`
-- `main`
-- secções condicionais de `publicSections`
-- `Footer`
+const loadingBackgroundColor =
+  safeSiteConfig?.corFundoGlobal?.trim() ||
+  defaultSiteConfig.corFundoGlobal ||
+  "#fffdf8";
+Mesmo sem a página final montada, a loading screen já usa o tema global resolvido, reduzindo o salto visual.
 
-Cada secção recebe `siteConfig` já normalizado e, quando aplicável, `siteImages` já normalizado.
+Alternância pública/admin
+getInitialView() lê window.location.hash
+hashchange mantém o estado sincronizado
+outro efeito escreve ou remove #admin ao mudar view
+Scroll por hash para secções públicas
+Há um efeito adicional que:
 
-### Tipografia dinâmica
+ignora #admin
+tenta localizar secções por id
+faz scrollIntoView({ behavior: "smooth", block: "start" })
+6. Frontend Público por Componente
+src/components/RSVP.jsx
+Fonte de dados
+Observa:
 
-O mecanismo tipográfico não usa Styled Components. Ele usa:
+artifacts/casamento-miqueias/public/data/convidados
+Estados locais principais
+guests
+query
+selectedId
+adults
+children
+attendanceStatus
+status
+loading
+Localização automática por convite
+getGuestQueryId() lê ?id=<conviteId>.
 
-- `TypographyProvider` para ouvir `config/tipografia`;
-- `applyTypographyVariables(typography)` para gravar CSS custom properties em `document.documentElement`;
-- regras globais em `src/index.css` para consumir essas variáveis.
+No useEffect(...), se existir id na URL, o componente procura um convidado cujo conviteId corresponda e chama selectGuest(match).
 
-Variáveis realmente escritas:
+Pesquisa de convidados no público
+filteredGuests:
 
-```text
+só pesquisa quando query.trim().length >= 3
+faz filtro por nome
+usa toLowerCase()
+limita a 8 resultados
+Suporte ao novo estado Não Comparecerá
+attendanceStatus
+Novo estado local que guarda a escolha corrente do formulário:
+
+Confirmado
+Não Comparecerá
+selectGuest(guest)
+Ao selecionar um convidado:
+
+usa normalizeGuestStatus(guest)
+se o convidado já estiver como Não Comparecerá, o formulário entra nesse estado
+nesse caso, adults e children são zerados
+handleAttendanceChange(value)
+Se o utilizador escolhe Não Comparecerá:
+
+adults = 0
+children = 0
+Se volta para Confirmado e não houver contagem:
+
+reidrata uma presença mínima a partir dos limites do convidado
+submitResponse()
+A submissão agora grava:
+
+status
+confirmado
+adultosConfirmados
+criancasConfirmadas
+dataResposta
+Regras:
+
+se attendanceStatus === Confirmado, exige pelo menos 1 presença
+se attendanceStatus === Não Comparecerá, grava:
+confirmado: false
+adultosConfirmados: 0
+criancasConfirmadas: 0
+Estado atual exibido
+O badge textual de estado usa:
+
+const currentGuestStatus = selectedGuest
+  ? normalizeGuestStatus(selectedGuest)
+  : GUEST_STATUS.PENDING;
+Logo, o frontend público não depende apenas de selectedGuest.status; ele normaliza a realidade do documento.
+
+Whitespace e parágrafos
+O componente passou a usar className="whitespace-pre-line" em vários pontos:
+
+descrição principal
+texto de prazo
+resumo do convite
+caixa de status/feedback
+Isto permite que quebras de linha gravadas no Firestore apareçam como parágrafos reais no frontend.
+
+src/components/Presentes.jsx
+Fontes de dados
+Observa:
+
+presentesRef()
+pixRef()
+entregaRef()
+Estado local
+presentes
+pix
+loading
+selectedGift
+deliveryConfig
+toast
+Modal de entrega expandido
+Quando o utilizador clica em comprar um presente:
+
+setSelectedGift(gift)
+abre um modal overlay com backdrop
+o modal lê deliveryConfig, vindo de config/entrega
+Campos usados no modal
+deliveryConfig.titulo
+deliveryConfig.mensagem
+deliveryConfig.endereco
+deliveryConfig.botaoCancelar
+deliveryConfig.botaoContinuar
+Função copyAddress()
+Nova funcionalidade introduzida:
+
+valida deliveryConfig.endereco
+usa navigator.clipboard.writeText(deliveryConfig.endereco)
+mostra toast:
+sucesso: "Endereço copiado."
+erro: "Não foi possível copiar o endereço."
+continueToStore()
+se selectedGift.linkCompra não existir:
+mostra "Este presente ainda não possui link de loja."
+caso exista:
+window.open(selectedGift.linkCompra, "_blank", "noopener,noreferrer")
+fecha o modal
+PIX
+A seção PIX continua com copyPix(), mas agora todo o bloco também usa whitespace-pre-line para respeitar quebras de linha em pix.mensagem e metadados.
+
+Whitespace e parágrafos
+whitespace-pre-line foi aplicado em:
+
+presentesDescricao
+pix.mensagem
+pixMeta
+deliveryConfig.mensagem
+deliveryConfig.endereco
+Comportamento de disponibilidade
+Se gift.reservado for verdadeiro:
+
+mostra badge "Já reservado"
+desativa CTA
+usa styles.disabledButtonCompact
+Outros componentes públicos com whitespace-pre-line
+A aplicação hoje respeita quebras de linha configuradas no CMS também em:
+
+src/components/Hero.jsx
+src/components/Historia.jsx
+src/components/BlocoExtra.jsx
+src/components/Footer.jsx
+src/components/RSVP.jsx
+src/components/Presentes.jsx
+Isto significa que o conteúdo editorial agora pode ser escrito com blocos multiline no admin e chegar ao frontend sem colapsar parágrafos.
+
+7. Painel Administrativo
+src/pages/Admin.jsx
+Natureza do ficheiro
+Continua a ser o maior ponto de concentração de lógica do sistema. Hoje reúne:
+
+autenticação
+CRUD de presentes
+CRUD de convidados
+gestão de status RSVP
+métricas
+exportação
+template de convites
+modal de partilha
+CMS de conteúdo
+CMS do modal de entrega
+CMS de cores
+CMS de imagens
+CMS de tipografia
+pesquisa em tempo real de presentes e convidados
+Autenticação
+Usa:
+
+onAuthStateChanged(auth, ...)
+signInWithEmailAndPassword(auth, ...)
+signOut(auth)
+Abas atuais
+presentes
+convidados
+pix
+aparencia
+cores-site
+midia
+tipografia
+A branch aparencia-legacy continua no código, mas não está presente em adminTabs.
+
+8. Gestão de Convidados no Admin
+Estados relevantes
+guestForm
+convidados
+buscaConvidado
+inviteGuest
+toast
+Métricas
+stats usa normalizeGuestStatus(item) para calcular:
+
+guests
+confirmed
+declined
+people
+O novo card visual introduzido foi:
+
+Não Comparecerão
+Cadastro manual
+onSaveGuest(event) agora suporta criação com status inicial:
+
+Confirmado
+Não Comparecerá
+Pendente
+Regras de persistência
+Usa:
+
+status: guestStatus
+confirmado: getGuestConfirmedFlag(guestStatus)
+dataResposta: null se Pendente
+presença mínima coerente se Confirmado
+getDefaultConfirmedCounts(guest)
+Novo helper interno de Admin.jsx que impede inconsistência entre status e contagens.
+
+Regra:
+
+se maxAdultos > 0 e ainda não houver confirmados, assume pelo menos 1 adulto ao marcar como Confirmado
+Edição rápida de status
+A tabela de convidados hoje possui um select inline por linha.
+
+A mudança chama:
+
+updateGuestStatus(item, event.target.value)
+updateGuestStatus(guest, nextStatus)
+Regras:
+
+ignora se o status novo for igual ao atual normalizado
+grava:
+status
+confirmado
+ultimaAtualizacao
+se Confirmado
+preenche adultosConfirmados e criancasConfirmadas com base em getDefaultConfirmedCounts
+se Pendente ou Não Comparecerá
+zera adultosConfirmados
+zera criancasConfirmadas
+dataResposta
+null para Pendente
+now para Confirmado ou Não Comparecerá
+Badges visuais de status
+getGuestStatusMeta(guest) resolve o estado e devolve o estilo correto:
+
+styles.badgeConfirmed
+styles.badgeDeclined
+styles.badgePending
+Pesquisa em tempo real de convidados
+Nova funcionalidade.
+
+Estado
+const [buscaConvidado, setBuscaConvidado] = useState("");
+Lista derivada
+const convidadosFiltrados = useMemo(() => {
+  const termo = buscaConvidado.trim().toLowerCase();
+  if (!termo) return convidados;
+  return convidados.filter((item) => item.nome?.toLowerCase().includes(termo));
+}, [buscaConvidado, convidados]);
+UI
+Foi adicionado um input acima da tabela de convidados com placeholder:
+
+Pesquisar convidado por nome...
+Se a pesquisa não encontrar nada, a tabela mostra:
+
+Nenhum resultado encontrado para a sua pesquisa.
+9. Gestão de Presentes no Admin
+Estados relevantes
+giftForm
+presentes
+buscaPresente
+Cadastro manual
+onSaveGift(event) grava:
+
+...giftForm
+lojaNome: giftForm.loja.trim()
+reservado: false
+reservadoPor: null
+dataCriacao: new Date().toISOString()
+Pesquisa em tempo real de presentes
+Nova funcionalidade.
+
+Estado
+const [buscaPresente, setBuscaPresente] = useState("");
+Lista derivada
+const presentesFiltrados = useMemo(() => {
+  const termo = buscaPresente.trim().toLowerCase();
+  if (!termo) return presentes;
+
+  return presentes.filter((item) => {
+    const nome = item.nome?.toLowerCase() || "";
+    const loja = (item.loja || item.lojaNome || "").toLowerCase();
+    return nome.includes(termo) || loja.includes(termo);
+  });
+}, [buscaPresente, presentes]);
+UI
+Foi introduzido um input acima da listagem com placeholder:
+
+Pesquisar presente ou loja...
+A pesquisa é:
+
+case-insensitive
+por nome
+por loja ou lojaNome
+Sem resultados, o admin mostra:
+
+Nenhum resultado encontrado para a sua pesquisa.
+Exportação de presentes
+Continua intacta.
+
+exportPresentesAsXlsx()
+exportPresentesAsPdf()
+A pesquisa não altera a exportação, que continua a trabalhar sobre o array completo presentes.
+
+10. Convites VIP no Admin
+Admin.jsx mantém um subsistema de convites com:
+
+makeInviteId(nome)
+siteUrl(conviteId)
+buildInviteMessage(template, guest)
+openInvite(guest)
+copyInviteText()
+downloadPosterImage()
+shareInvite()
+Regras principais
+conviteId é slugificado e recebe suffix único
+o link final é construído como ?id=<conviteId>
+o template substitui [NOME] e [LINK]
+se o convidado ainda não tiver conviteId, openInvite() grava-o em Firestore
+Partilha
+O modal de convite permite:
+
+copiar texto
+baixar cartaz
+partilha nativa com navigator.share, quando disponível
+abertura direta do WhatsApp com query text
+11. CMS do Modal de Entrega
+Localização no Admin
+Fica dentro de ContentCmsTab(...), em src/pages/Admin.jsx.
+
+Campos editáveis
+titulo
+botaoContinuar
+mensagem
+endereco
+botaoCancelar
+Persistência
+onSaveEntrega(event) grava em:
+
+artifacts/casamento-miqueias/public/data/config/entrega
+com merge:
+
+setDoc(entregaRef(), { ...entrega, ultimaAtualizacao: new Date().toISOString() }, { merge: true })
+Acoplamento com o frontend
+O modal do frontend em Presentes.jsx é inteiramente guiado por esse documento. Ou seja:
+
+o admin controla o título
+controla o texto
+controla o endereço mostrado
+controla os rótulos dos botões
+e o frontend adiciona sobre isso a funcionalidade operacional de Copiar Endereço
+12. Tipografia Global
+src/providers/TypographyProvider.jsx observa config/tipografia e aplica as mudanças a toda a aplicação.
+
+Pipeline atual
+listener em tipografiaRef()
+merge com DEFAULT_TYPOGRAPHY
+ensureGoogleFont(fontFamily) para fontes não-sistema
+applyTypographyVariables(typography) em document.documentElement
+Variáveis CSS escritas
 --font-titulos
 --font-textos
 --font-destaques
@@ -587,423 +878,145 @@ Variáveis realmente escritas:
 --ls-titulos
 --ls-textos
 --ls-destaques
-```
-
-Seletores globais que consomem essas variáveis:
-
-- `body`
-- `h1` a `h6`
-- `p, li`
-- `span, div`
-- `small, time, .typography-accent, strong.typography-accent`
-- `#inicio p`
-- `footer p:nth-of-type(2)`
-- `footer p:first-of-type`
-
-### Injeção de Google Fonts
-
-`TypographyProvider` também chama `ensureGoogleFont(fontFamily)`.
-
-Regras:
-
-- se a fonte for de sistema, nada é injetado;
-- se for custom, é criado um `<link rel="stylesheet">` para `fonts.googleapis.com`;
-- o link é deduplicado por `data-google-font="<slug>"`.
-
-### Cores de fundo por secção
-
-Aqui há uma distinção importante.
-
-Tipografia:
-
-- usa variáveis CSS globais.
-
-Fundos de secção:
-
-- não usam Styled Components;
-- também não usam classes Tailwind parametrizadas;
-- são aplicados principalmente por `inline style`, com valor vindo de `siteConfig`.
-
-Campos atuais:
-
-- `corFundoGlobal`
-- `corFundoRSVP`
-- `corFundoLocalArea`
-- `corFundoContagemArea`
-- `corFundoContagemCards`
-- `corFundoPix`
-- `corFundoFooter`
-
-Pontos de aplicação:
-
-- `src/App.jsx`
-  - `globalBackgroundColor = safeSiteConfig?.corFundoGlobal?.trim() || "#fffdf8"`
-  - esse valor é aplicado em `publicShellStyle(backgroundColor)`
-  - também é escrito diretamente em `document.body.style.background` e `document.body.style.backgroundColor`
-- `src/components/RSVP.jsx`
-  - `rsvpBackground = safeSiteConfig?.corFundoRSVP?.trim() || "linear-gradient(150deg, #2f2b73 0%, #181435 100%)"`
-  - aplicado no `aside`
-- `src/components/Local.jsx`
-  - `localAreaBackgroundColor = siteConfig?.corFundoLocalArea?.trim() || "#0b1b3a"`
-  - aplicado apenas na área externa
-  - o cartão interno continua controlado por `localCardBackgroundColor`
-- `src/components/Contagem.jsx`
-  - `areaBackground`
-  - `cardBackground`
-- `src/components/Presentes.jsx`
-  - `pixBackground`
-- `src/components/Footer.jsx`
-  - `footerBackgroundColor`
-
-### Tailwind v4 na UI
-
-O Tailwind aparece com mais força no painel admin e em alguns componentes públicos mais recentes.
-
-Classes críticas vistas no código:
-
-- `rounded-[32px]`
-- `border border-amber-200/60`
-- `bg-white/80`
-- `shadow-xl shadow-slate-900/5`
-- `backdrop-blur`
-- `bg-indigo-950`
-- `rounded-2xl`
-- `md:grid-cols-2`
-- `fixed inset-0 z-50`
-- `grid grid-cols-2 gap-4 md:grid-cols-4 xl:grid-cols-5`
-
-### Imagens
-
-Imagens são resolvidas por `resolveImageSource(...sources)` em `src/config/siteImages.js`.
-
-Padrão:
-
-- usa a primeira string não vazia encontrada;
-- o componente pode tentar `siteImages`, depois `siteConfig`, depois fallback local.
-
-Exemplos:
-
-- Hero: `safeSiteImages?.heroBanner` -> `imageFallbacks.heroBanner`
-- História: `safeSiteImages?.historiaCard1` -> `safeSiteConfig?.historiaCard1Imagem` -> fallback
-- Bloco extra e galeria: primeiro `config/imagens`, depois `config/conteudo`
-
-## 5. PAINEL ADMIN E EXPORTAÇÃO
-
-### Autenticação do admin
-
-`src/pages/Admin.jsx` usa Firebase Auth:
-
-- `onAuthStateChanged(auth, ...)`
-- `signInWithEmailAndPassword(auth, email, password)`
-- `signOut(auth)`
-
-Se não houver utilizador autenticado, o componente renderiza apenas o cartão de login.
-
-### Abas atuais do admin
-
-`adminTabs` contém:
-
-- `presentes`
-- `convidados`
-- `pix`
-- `aparencia`
-- `cores-site`
-- `midia`
-- `tipografia`
-
-Existe ainda uma branch `activeTab === "aparencia-legacy"`, mas ela não está listada em `adminTabs`, logo está fora da navegação atual. É código legado/dormante.
-
-### O que cada aba faz
-
-#### `presentes`
-
-- cria presentes manualmente;
-- lista presentes existentes;
-- exporta XLSX e PDF;
-- remove presentes.
-
-#### `convidados`
-
-- cria convidados da lista fechada;
-- define `conviteId` por `makeInviteId(nome)`;
-- mostra listagem com status;
-- exporta XLSX e PDF;
-- abre modal de convite VIP;
-- permite configurar `config/convites`.
-
-#### `pix`
-
-- edita o documento `config/pix`.
-
-#### `aparencia`
-
-É o CMS principal de conteúdo e toggles.
-
-Subgrupos definidos em `cmsSectionGroups`:
-
-- `toggles`
-- `hero`
-- `historia`
-- `local`
-- `rsvp`
-- `presentes`
-- `extra`
-
-Além disso, a mesma área contém o formulário separado para `config/entrega`.
-
-#### `cores-site`
-
-É a área exclusiva de fundos públicos.
-
-Campos:
-
-- `corFundoGlobal`
-- `corFundoRSVP`
-- `corFundoLocalArea`
-- `corFundoContagemArea`
-- `corFundoContagemCards`
-- `corFundoPix`
-- `corFundoFooter`
-
-Cada card mostra:
-
-- label humana;
-- preview visual;
-- `input type="color"`;
-- campo textual;
-- fallback original documentado.
-
-#### `midia`
-
-Edita `config/imagens` com previews:
-
-- `heroBanner`
-- `historiaCard1`
-- `historiaCard2`
-- `historiaCard3`
-- `galeriaImagem1`
-- `galeriaImagem2`
-- `galeriaImagem3`
-- `blocoExtraImagem`
-- `rodapeBackground`
-
-#### `tipografia`
-
-Edita `config/tipografia` por grupos:
-
-- `titulos`
-- `textos`
-- `destaques`
-
-Cada grupo expõe:
-
-- `fontFamily`
-- `color`
-- `fontSize`
-- `fontWeight`
-- `lineHeight`
-- `letterSpacing`
-
-### Convites VIP
-
-O admin implementa um subsistema próprio em `Admin.jsx`.
-
-Funções-chave:
-
-- `makeInviteId(nome)`
-- `siteUrl(conviteId)`
-- `buildInviteMessage(template, guest)`
-- `copyInviteText()`
-- `downloadPosterImage()`
-- `shareInvite()`
-- `openInvite(guest)`
-
-Comportamento:
-
-- `conviteId` é slugificado com remoção de acentos e suffix aleatório;
-- o link final usa query string `?id=<conviteId>`;
-- `mensagemPadrao` substitui `[NOME]` e `[LINK]`;
-- se `guest` ainda não tiver `conviteId`, `openInvite` grava um via `updateDoc`;
-- o modal permite copiar texto, baixar cartaz, partilhar nativamente e enviar para WhatsApp.
-
-### Exportação isolada
-
-O módulo de exportação fica em `src/utils/adminExport.js`.
-
-#### Excel
-
-Função:
-
-- `exportRowsToXlsx({ baseName, sheetName, rows })`
-
-Implementação:
-
-- `XLSX.utils.book_new()`
-- `XLSX.utils.json_to_sheet(rows || [])`
-- `XLSX.utils.book_append_sheet(workbook, worksheet, sheetName)`
-- `XLSX.writeFile(workbook, "<nome>-YYYY-MM-DD.xlsx")`
-
-#### PDF
-
-Função:
-
-- `exportRowsToPdf({ baseName, title, head, body })`
-
-Implementação:
-
-- cria `new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" })`
-- escreve título em `(40, 40)`
-- usa `autoTable(pdf, { ... })`
-- `headStyles.fillColor = [36, 27, 47]`
-- `alternateRowStyles.fillColor = [248, 244, 238]`
-- guarda como `"<nome>-YYYY-MM-DD.pdf"`
-
-### Princípio de Lockout
-
-O painel admin não consome as próprias cores editáveis do site público.
-
-No código atual, isso é visível em dois aspetos:
-
-- a aba `Cores do Site` grava apenas `config/conteudo`, mas o admin continua com o seu próprio conjunto de estilos Tailwind/inline;
-- o texto da aba explicita a intenção: `"O painel admin permanece com visual estático por segurança de contraste e navegação."`
-
-Razão arquitetural:
-
-- se o admin também lesse cores editáveis do Firestore, uma escolha inválida de contraste poderia dificultar ou até bloquear a manutenção da aplicação;
-- o projeto opta por manter o painel como zona operacional segura, separada do tema do site público.
-
-## 6. GUIA DE MANUTENÇÃO (HAND-OFF)
-
-### Como adicionar um novo campo ao CMS
-
-Fluxo recomendado para um novo campo editorial:
-
-1. Declarar o campo em `src/config/siteConfig.js`.
-2. Definir o valor default em `defaultSiteConfig`.
-3. Garantir que `normalizeSiteConfig(data)` continua a fazer merge automaticamente.
-4. Expor o campo no admin:
-   - se for conteúdo/toggle, adicionar em `cmsSectionGroups` dentro de `src/pages/Admin.jsx`;
-   - se for cor pública de fundo, adicionar em `siteColorFields`;
-   - se for imagem, adicionar na aba `MediaImagesTab` e, se necessário, em `src/config/siteImages.js`.
-5. Consumir o campo no componente público correspondente.
-6. Aplicar fallback local no componente com `?.trim() || "valor-original"` ou equivalente.
-7. Se o campo precisar de exportação, refletir a mudança na montagem de `rows` ou `body` em `Admin.jsx`.
-
-### Como adicionar um novo grupo tipográfico
-
-Hoje o sistema assume explicitamente três grupos:
-
-- `titulos`
-- `textos`
-- `destaques`
-
-Para adicionar outro:
-
-1. atualizar `DEFAULT_TYPOGRAPHY` em `TypographyProvider.jsx`;
-2. atualizar `mergeTypography`;
-3. expandir `applyTypographyVariables`;
-4. criar novos consumidores em `index.css`;
-5. expandir a aba `TypographyProfessionalTab`.
-
-Sem todos esses passos, o novo grupo ficará persistido mas não aplicado visualmente.
-
-### Como adicionar uma nova secção pública
-
-Pontos de alteração:
-
-1. componente novo em `src/components/`;
-2. novo toggle em `defaultSiteConfig` e `getSectionVisibility`;
-3. inclusão ordenada em `publicSections` dentro de `src/App.jsx`;
-4. inclusão opcional em `publicNavItems`;
-5. campos de CMS em `cmsSectionGroups`;
-6. se houver imagens, também em `config/imagens` e `MediaImagesTab`.
-
-### Zonas de perigo
-
-#### 1. `Admin.jsx` é um ficheiro monolítico
-
-Riscos:
-
-- mistura autenticação, CRUD, CMS, convite VIP, exportação, media e tipografia;
-- é fácil introduzir regressões transversais ao editar handlers ou estados locais;
-- o ficheiro contém blocos legados como `aparencia-legacy`.
-
-#### 2. Dualidade de acesso ao Firestore
-
-Existem dois estilos simultâneos:
-
-- acesso direto nos componentes/painel;
-- acesso encapsulado em `src/services/*.js`.
-
-Risco:
-
-- um programador pode alterar um contrato num serviço e esquecer o acesso direto, ou vice-versa.
-
-#### 3. Modal fixo de entrega
-
-O overlay de `Presentes.jsx` usa:
-
-- `className="fixed inset-0 z-50 ..."`
-- clique no backdrop para fechar;
-- `stopPropagation()` no cartão.
-
-Riscos:
-
-- qualquer alteração em `z-index`, overflow ou foco pode quebrar scroll, fecho por clique externo ou visibilidade do modal.
-
-#### 4. Injeção global de CSS variables
-
-`TypographyProvider` escreve diretamente em `document.documentElement.style`.
-
-Riscos:
-
-- mudanças de naming em `--font-*`, `--color-*`, `--size-*` quebram o site inteiro;
-- seletores globais como `span, div` em `index.css` têm alcance muito amplo;
-- qualquer refactor de tipografia deve ser tratado como mudança sistémica, não local.
-
-#### 5. Injeção de Google Fonts em runtime
-
-Riscos:
-
-- dependência de rede para fontes não-sistema;
-- nomes malformados podem gerar links inválidos;
-- o algoritmo assume que a primeira família antes da vírgula é a principal.
-
-#### 6. Cores públicas com `input type="color"`
-
-Os fundos públicos aceitam strings livres no Firestore, mas o painel usa `type="color"` para facilitar casos hexadecimais.
-
-Implicação:
-
-- o campo textual permite valores não-hex, incluindo gradients;
-- o `type="color"` só representa bem valores hexadecimais;
-- por isso os componentes públicos usam fallback com `.trim() || ...` e não dependem de defaults já preenchidos no Firestore.
-
-#### 7. Query string de convites
-
-O RSVP automático depende de `window.location.search` e do parâmetro `id`.
-
-Riscos:
-
-- qualquer refactor de URL precisa preservar `?id=<conviteId>`;
-- se o nome do parâmetro mudar, `getGuestQueryId()` deixa de localizar convites.
-
-#### 8. Dependência de campos literais
-
-Grande parte do sistema compara strings fixas:
-
-- `status === "Confirmado"`
-- `window.location.hash === "#admin"`
-- placeholders `[NOME]` e `[LINK]`
-
-Risco:
-
-- alterar essas strings sem mapear todos os consumidores gera bugs silenciosos.
-
-### Recomendações práticas para futuro programador
-
-- Tratar `src/config/siteConfig.js` como schema de facto do CMS.
-- Antes de adicionar UI nova, confirmar se o dado já não existe em `config/conteudo`, `config/imagens` ou `config/tipografia`.
-- Preferir criar componentes/tabs menores no admin antes de expandir ainda mais `Admin.jsx`.
-- Se a app passar a reservar presentes de forma automática no site público, reutilizar `reservarPresenteTransacao()` em vez de criar atualização ingênua sem transação.
-- Se houver refactor de rotas, preservar a semântica de `#admin` e `?id=<conviteId>` ou migrar ambos de forma coordenada.
+Implicação arquitetural
+A tipografia é global e sistémica. Alterar os nomes dessas variáveis ou os seletores que as consomem em src/index.css afeta todo o site.
+
+13. Cores e Aparência Pública
+As cores públicas continuam centralizadas em config/conteudo, não em config/tipografia.
+
+Campos principais:
+
+corFundoGlobal
+corFundoRSVP
+corFundoLocalArea
+corFundoContagemArea
+corFundoContagemCards
+corFundoPix
+corFundoFooter
+Aplicações importantes:
+
+App.jsx aplica corFundoGlobal ao shell e ao body
+RSVP.jsx aplica corFundoRSVP
+Presentes.jsx aplica corFundoPix
+Local.jsx, Contagem.jsx e Footer.jsx usam os seus respetivos campos
+14. Exportação
+src/utils/adminExport.js continua simples e estável.
+
+Excel
+exportRowsToXlsx({ baseName, sheetName, rows })
+
+cria workbook
+converte JSON para worksheet
+salva com nome <baseName>-YYYY-MM-DD.xlsx
+PDF
+exportRowsToPdf({ baseName, title, head, body })
+
+cria jsPDF
+desenha título
+usa jspdf-autotable
+salva como <baseName>-YYYY-MM-DD.pdf
+Atualização recente relacionada a RSVP
+As exportações de convidados no Admin.jsx foram atualizadas para usar normalizeGuestStatus(item) antes de montar linhas.
+
+Isto garante que o export respeita:
+
+Confirmado
+Não Comparecerá
+Pendente
+inclusive para documentos legados que só tinham o booleano confirmado.
+
+15. Regras de Negócio Consolidadas
+Presentes
+podem estar reservados ou disponíveis
+reserva transacional ainda existe em src/services/presentes.js
+o frontend atual não executa reserva automática; apenas encaminha para loja
+RSVP
+trabalha sobre documentos já existentes
+o convidado pode:
+confirmar presença
+recusar presença
+o admin pode:
+criar com qualquer estado inicial
+alterar o estado posteriormente
+o sistema preserva compatibilidade com registos antigos
+Conteúdo editorial
+multiline agora é respeitado por whitespace-pre-line
+isso vale para textos vindos do Firestore em vários componentes públicos
+Admin
+exportação continua independente dos filtros visuais
+filtros de pesquisa afetam apenas renderização da lista
+métricas usam os arrays completos observados
+16. Zonas de Atenção
+src/pages/Admin.jsx continua monolítico
+Ainda é o principal risco estrutural do projeto:
+
+muito estado local
+muitos listeners
+múltiplas responsabilidades
+lógica de negócio e UI muito acopladas
+Coexistência entre acesso direto e services
+O projeto continua com duas abordagens:
+
+acesso direto ao Firestore nos componentes
+helpers em src/services/*.js
+Isto aumenta o risco de divergência de contrato.
+
+App.jsx e o flag isFirebaseLoaded
+A correção do FOUC resolveu o boot visual, mas a abordagem continua baseada em estado derivado manual. Mudanças futuras no fluxo de loading devem ser feitas com cuidado para não reintroduzir flash de conteúdo.
+
+Strings literais de negócio
+O sistema ainda compara várias strings textuais em runtime:
+
+"#admin"
+placeholders [NOME] e [LINK]
+labels de status de RSVP
+O utilitário guestStatus.js melhorou esse cenário no domínio de convidados, mas a app ainda depende de algumas convenções literais.
+
+17. Guia de Manutenção
+Para adicionar um novo campo ao CMS
+Adicionar em defaultSiteConfig em src/config/siteConfig.js
+Garantir merge por normalizeSiteConfig(data)
+Expor no admin:
+cmsSectionGroups
+siteColorFields
+MediaImagesTab
+ou outro formulário específico
+Consumir no componente público correto
+Aplicar fallback local
+Para expandir os estados de RSVP
+Hoje o ponto correto é src/utils/guestStatus.js.
+
+Se surgir um novo estado, é necessário atualizar:
+
+GUEST_STATUS
+normalizeGuestStatus(guest)
+getGuestConfirmedFlag(status)
+RSVP.jsx
+Admin.jsx
+exportação de convidados
+badges visuais do admin
+Para alterar o modal de entrega
+Os pontos reais são:
+
+defaults em src/config/deliveryConfig.js
+formulário em ContentCmsTab(...) dentro de Admin.jsx
+renderização operacional em src/components/Presentes.jsx
+Para mexer no boot/loading
+Os pontos reais são:
+
+contentReady
+imagesReady
+isFirebaseLoaded
+LoadingScreen
+PublicPage
+efeitos de sincronização do body em App.jsx
+18. Resumo Executivo da Arquitetura Atual
+O sistema atual está num estágio mais maduro do que a versão anterior documentada. Em particular:
+
+o RSVP deixou de ser binário implícito e passou a ter um domínio explícito de estados
+o frontend público ganhou robustez visual no arranque com uma estratégia clara contra FOUC
+o CMS passou a respeitar melhor conteúdo multiline graças a whitespace-pre-line
+o modal de entrega tornou-se mais útil operacionalmente com Copiar Endereço
+o admin melhorou a usabilidade com pesquisa em tempo real para convidados e presentes
+a exportação foi alinhada ao novo modelo de status sem quebrar registos antigos
+A base continua funcional e bem conectada ao Firestore, mas o maior ponto de dívida técnica permanece o tamanho e a concentração de responsabilidades em src/pages/Admin.jsx.
