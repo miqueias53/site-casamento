@@ -579,12 +579,17 @@ loading
 selectedGift
 deliveryConfig
 toast
-Modal de entrega expandido
+reservationName
+reservationToken
+actionBusy
+Modal central de entrega e reserva
 Quando o utilizador clica em comprar um presente:
 
 setSelectedGift(gift)
-abre um modal overlay com backdrop
+abre um modal central em tela cheia no viewport
+o fundo do site permanece visível, mas sem interação
 o modal lê deliveryConfig, vindo de config/entrega
+o fluxo não depende mais de scroll até ao meio da página
 Campos usados no modal
 deliveryConfig.titulo
 deliveryConfig.mensagem
@@ -605,6 +610,23 @@ mostra "Este presente ainda não possui link de loja."
 caso exista:
 window.open(selectedGift.linkCompra, "_blank", "noopener,noreferrer")
 fecha o modal
+Reserva pública
+Presentes.jsx agora usa src/services/presentes.js para:
+
+reservarPresenteTransacao(id, nomeConvidado, reservaToken)
+desreservarPresentePublico(id, reservaToken)
+
+O frontend:
+
+gera e persiste um reservaToken em localStorage
+guarda opcionalmente o nome do reservante em localStorage
+permite reservar e continuar para a loja
+permite continuar sem reservar
+permite desreservar apenas no mesmo navegador que criou a reserva
+Se gift.reservado for verdadeiro e gift.reservaToken coincidir com o token local:
+
+o card mostra que existe uma reserva ativa neste navegador
+o modal permite desreservar ou seguir para a loja
 PIX
 A seção PIX continua com copyPix(), mas agora todo o bloco também usa whitespace-pre-line para respeitar quebras de linha em pix.mensagem e metadados.
 
@@ -617,7 +639,7 @@ pixMeta
 deliveryConfig.mensagem
 deliveryConfig.endereco
 Comportamento de disponibilidade
-Se gift.reservado for verdadeiro:
+Se gift.reservado for verdadeiro e pertencer a outra pessoa:
 
 mostra badge "Já reservado"
 desativa CTA
@@ -678,13 +700,35 @@ toast
 Métricas
 stats usa normalizeGuestStatus(item) para calcular:
 
+invites
+total de registos na colecao convidados
+registeredInvites
+total de convidados que possuem conviteId; o card fica oculto quando o valor for igual a invites
 guests
+total de pessoas previstas na lista, somando maxAdultos + maxCriancas por registo
 confirmed
+total de pessoas confirmadas, somando a lotacao total dos convites com status Confirmado
 declined
-people
-O novo card visual introduzido foi:
+total de pessoas que nao comparecerao, usando a lotacao prevista do convite
+children
+total de criancas previstas na lista, somando maxCriancas por registo
+confirmedChildren
+total de criancas confirmadas apenas para convites com status Confirmado
+gifts
+total de itens na colecao presentes
+reservedGifts
+total de presentes com reservado === true
+availableGifts
+total de presentes ainda disponiveis
 
-Não Comparecerão
+O painel foi reorganizado em grupos auditaveis:
+
+Convites
+Pessoas
+Criancas
+Presentes
+
+Cada card possui uma ajuda flutuante com a regra de calculo exibida na propria interface.
 Cadastro manual
 onSaveGuest(event) agora suporta criação com status inicial:
 
@@ -762,6 +806,8 @@ onSaveGift(event) grava:
 lojaNome: giftForm.loja.trim()
 reservado: false
 reservadoPor: null
+dataReserva: null
+reservaToken: null
 dataCriacao: new Date().toISOString()
 Pesquisa em tempo real de presentes
 Nova funcionalidade.
@@ -791,6 +837,13 @@ por loja ou lojaNome
 Sem resultados, o admin mostra:
 
 Nenhum resultado encontrado para a sua pesquisa.
+Operação manual
+A tabela de presentes continua a mostrar o estado atual e agora também pode:
+
+liberar uma reserva com libertarPresenteAdmin(id)
+remover o item do catálogo
+
+As exportações passam a incluir também a data da reserva para auditoria operacional.
 Exportação de presentes
 Continua intacta.
 
@@ -838,13 +891,13 @@ com merge:
 
 setDoc(entregaRef(), { ...entrega, ultimaAtualizacao: new Date().toISOString() }, { merge: true })
 Acoplamento com o frontend
-O modal do frontend em Presentes.jsx é inteiramente guiado por esse documento. Ou seja:
+O modal central do frontend em Presentes.jsx é inteiramente guiado por esse documento. Ou seja:
 
 o admin controla o título
 controla o texto
 controla o endereço mostrado
 controla os rótulos dos botões
-e o frontend adiciona sobre isso a funcionalidade operacional de Copiar Endereço
+e o frontend adiciona sobre isso a funcionalidade operacional de Copiar Endereço, reservar, desreservar e continuar para a loja
 12. Tipografia Global
 src/providers/TypographyProvider.jsx observa config/tipografia e aplica as mudanças a toda a aplicação.
 
@@ -899,6 +952,44 @@ App.jsx aplica corFundoGlobal ao shell e ao body
 RSVP.jsx aplica corFundoRSVP
 Presentes.jsx aplica corFundoPix
 Local.jsx, Contagem.jsx e Footer.jsx usam os seus respetivos campos
+
+Responsividade recente do site publico
+O frontend publico passou a seguir uma estrategia mobile-first com tres faixas operacionais:
+
+mobile: ate 767px
+tablet: 768px a 1023px
+desktop: 1024px+
+
+Comportamentos principais:
+
+Navbar.jsx
+usa menu recolhido no mobile
+mantem navegacao horizontal apenas no desktop
+evita quebra visual por wrap em larguras pequenas
+
+Hero.jsx
+usa tipografia fluida com clamp(...)
+evita depender de 100vh puro em mobile
+desativa backgroundAttachment: fixed fora do desktop
+
+RSVP.jsx
+empilha o layout em uma coluna no mobile e tablet
+mantem duas colunas apenas no desktop
+reduz paddings e tamanhos de titulo em telas pequenas
+
+Presentes.jsx
+usa grelha de cards progressiva:
+1 coluna no mobile pequeno
+2 colunas em mobile largo
+3 em tablet
+4 ou 5 no desktop, conforme largura
+
+O modal de presente agora respeita o dispositivo:
+mobile: tela cheia
+desktop: container central com largura maxima e scroll interno
+
+Local.jsx e Historia.jsx
+receberam ajustes de padding, tipografia e distribuicao para preservar leitura e alinhamento sem alterar a identidade visual
 14. Exportação
 src/utils/adminExport.js continua simples e estável.
 

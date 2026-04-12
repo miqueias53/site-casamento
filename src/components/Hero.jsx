@@ -1,8 +1,11 @@
 import { useEffect, useState } from "react";
+
 import { imageFallbacks, resolveImageSource } from "../config/siteImages.js";
+import useViewport from "../hooks/useViewport.js";
 
 export default function Hero({ siteConfig, siteImages }) {
   const [show, setShow] = useState(false);
+  const viewport = useViewport();
   const safeSiteConfig = siteConfig ?? {};
   const safeSiteImages = siteImages ?? {};
   const heroImage = resolveImageSource(safeSiteImages?.heroBanner, imageFallbacks.heroBanner);
@@ -17,41 +20,42 @@ export default function Hero({ siteConfig, siteImages }) {
   return (
     <div
       style={{
-        height: "100vh",
+        minHeight: viewport.isMobile ? "100svh" : "100vh",
         backgroundImage: `url(${heroImage})`,
         backgroundSize: "cover",
         backgroundPosition: "center",
-        backgroundAttachment: "fixed",
+        backgroundAttachment: viewport.isDesktop ? "fixed" : "scroll",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
         textAlign: "center",
         color: "#fff",
         position: "relative",
+        padding: viewport.isMobile ? "128px 20px 72px" : "144px 32px 92px",
       }}
     >
       <div
         style={{
           position: "absolute",
-          top: 0,
-          left: 0,
-          width: "100%",
-          height: "100%",
+          inset: 0,
           background: "linear-gradient(rgba(0,0,0,0.5), rgba(0,0,0,0.6))",
         }}
-      ></div>
+      />
 
-      <div style={{ position: "relative" }}>
+      <div style={{ position: "relative", width: "min(900px, 100%)" }}>
         <h1
           style={{
-            fontSize: safeSiteConfig?.heroTituloFontSize || "70px",
-            lineHeight: "1.2",
-            marginBottom: "20px",
+            fontSize: safeSiteConfig?.heroTituloFontSize
+              ? `clamp(2.7rem, 8vw, ${safeSiteConfig.heroTituloFontSize})`
+              : "clamp(3rem, 9vw, 70px)",
+            lineHeight: "1.15",
+            marginBottom: viewport.isMobile ? "16px" : "20px",
             opacity: show ? 1 : 0,
             transform: show ? "translateY(0)" : "translateY(40px)",
             transition: "all 1s ease",
             fontFamily: safeSiteConfig?.titulosFontFamily || "Georgia, serif",
             fontWeight: safeSiteConfig?.titulosFontWeight || "600",
+            textWrap: "balance",
           }}
         >
           {heroTitle}
@@ -61,8 +65,12 @@ export default function Hero({ siteConfig, siteImages }) {
           className="whitespace-pre-line"
           style={{
             fontFamily: safeSiteConfig?.dataFontFamily || "Georgia, serif",
-            fontSize: safeSiteConfig?.dataFontSize || "18px",
+            fontSize: safeSiteConfig?.dataFontSize
+              ? `clamp(1rem, 3vw, ${safeSiteConfig.dataFontSize})`
+              : "clamp(1rem, 3vw, 18px)",
             fontWeight: safeSiteConfig?.dataFontWeight || "500",
+            maxWidth: "min(560px, 100%)",
+            margin: "0 auto",
           }}
         >
           {heroDate}

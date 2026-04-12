@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
+
 import { imageFallbacks, resolveImageSource } from "../config/siteImages.js";
+import useViewport from "../hooks/useViewport.js";
 
 const defaultItems = [
   {
@@ -21,6 +23,7 @@ const defaultItems = [
 
 export default function Historia({ siteConfig, siteImages }) {
   const [show, setShow] = useState(false);
+  const viewport = useViewport();
   const safeSiteConfig = useMemo(() => siteConfig ?? {}, [siteConfig]);
   const safeSiteImages = useMemo(() => siteImages ?? {}, [siteImages]);
   const cardBackgroundColor = safeSiteConfig?.historiaCardBackgroundColor || "#fffaf2";
@@ -54,14 +57,18 @@ export default function Historia({ siteConfig, siteImages }) {
   return (
     <section
       style={{
-        padding: "100px 20px",
+        padding: viewport.isMobile ? "72px 16px" : "100px 20px",
         textAlign: "center",
         background: "#fff",
       }}
     >
       <h2
         style={{
-          fontSize: safeSiteConfig?.titulosFontSize || "34px",
+          fontSize: safeSiteConfig?.titulosFontSize
+            ? `clamp(2rem, 5vw, ${safeSiteConfig.titulosFontSize})`
+            : viewport.isMobile
+              ? "30px"
+              : "34px",
           marginBottom: "10px",
           fontFamily: safeSiteConfig?.titulosFontFamily || "serif",
           fontWeight: safeSiteConfig?.titulosFontWeight || "600",
@@ -77,10 +84,12 @@ export default function Historia({ siteConfig, siteImages }) {
         className="whitespace-pre-line"
         style={{
           maxWidth: "600px",
-          margin: "0 auto 50px",
+          margin: `0 auto ${viewport.isMobile ? 34 : 50}px`,
           color: "#777",
           fontFamily: safeSiteConfig?.textosFontFamily || "Georgia, serif",
-          fontSize: safeSiteConfig?.textosFontSize || "16px",
+          fontSize: safeSiteConfig?.textosFontSize
+            ? `clamp(0.98rem, 3vw, ${safeSiteConfig.textosFontSize})`
+            : "16px",
           fontWeight: safeSiteConfig?.textosFontWeight || "400",
           opacity: show ? 1 : 0,
           transform: show ? "translateY(0)" : "translateY(40px)",
@@ -93,19 +102,26 @@ export default function Historia({ siteConfig, siteImages }) {
 
       <div
         style={{
-          display: "flex",
-          flexWrap: "wrap",
-          justifyContent: "center",
-          gap: "28px",
+          display: "grid",
+          gridTemplateColumns: viewport.isMobile
+            ? "1fr"
+            : viewport.isTablet
+              ? "repeat(2, minmax(0, 1fr))"
+              : "repeat(3, minmax(0, 1fr))",
+          gap: viewport.isMobile ? "20px" : "28px",
+          width: "min(1080px, 100%)",
+          margin: "0 auto",
         }}
       >
         {itens.map((item, index) => (
           <article
             key={index}
             style={{
-              maxWidth: "320px",
-              padding: "20px",
-              borderRadius: "24px",
+              maxWidth: viewport.isMobile ? "100%" : "320px",
+              width: "100%",
+              justifySelf: "center",
+              padding: viewport.isMobile ? "16px" : "20px",
+              borderRadius: viewport.isMobile ? "20px" : "24px",
               background: cardBackgroundColor,
               boxShadow: "0 18px 42px rgba(36, 27, 47, 0.08)",
               border: "1px solid rgba(196, 166, 97, 0.14)",
@@ -149,7 +165,7 @@ export default function Historia({ siteConfig, siteImages }) {
             <h3
               style={{
                 marginTop: "18px",
-                fontSize: "20px",
+                fontSize: viewport.isMobile ? "18px" : "20px",
                 fontFamily: safeSiteConfig?.titulosFontFamily || "serif",
                 fontWeight: safeSiteConfig?.titulosFontWeight || "600",
               }}
@@ -162,7 +178,9 @@ export default function Historia({ siteConfig, siteImages }) {
               style={{
                 margin: "12px 0 0",
                 color: "#555",
-                fontSize: safeSiteConfig?.textosFontSize || "14px",
+                fontSize: safeSiteConfig?.textosFontSize
+                  ? `clamp(0.92rem, 2.6vw, ${safeSiteConfig.textosFontSize})`
+                  : "14px",
                 fontFamily: safeSiteConfig?.textosFontFamily || "serif",
                 fontWeight: safeSiteConfig?.textosFontWeight || "400",
               }}

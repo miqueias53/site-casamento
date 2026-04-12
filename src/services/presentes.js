@@ -24,13 +24,14 @@ export async function buscarPresentes() {
     return snapshot.docs.map((item) => ({ id: item.id, ...item.data() }));
   } catch (erro) {
     console.error("Erro ao procurar presentes:", erro);
-    throw new Error("Falha na sincronização do catálogo.");
+    throw new Error("Falha na sincronizacao do catalogo.");
   }
 }
 
 export async function reservarPresenteTransacao(
   id,
-  nomeConvidado = "Convidado Anónimo"
+  nomeConvidado = "Convidado",
+  reservaToken = null
 ) {
   const presenteRef = getPresenteDoc(id);
 
@@ -43,17 +44,51 @@ export async function reservarPresenteTransacao(
       }
 
       if (presenteDoc.data().reservado === true) {
-        throw new Error("Este item já foi reservado por outra pessoa.");
+        throw new Error("Este item ja foi reservado por outra pessoa.");
       }
 
       transaction.update(presenteRef, {
         reservado: true,
         reservadoPor: nomeConvidado,
         dataReserva: new Date().toISOString(),
+        reservaToken: reservaToken || null,
       });
     });
 
     return { sucesso: true, mensagem: "Reserva efetuada com sucesso!" };
+  } catch (erro) {
+    return { sucesso: false, erro: erro.message };
+  }
+}
+
+export async function desreservarPresentePublico(id, reservaToken) {
+  const presenteRef = getPresenteDoc(id);
+
+  try {
+    await runTransaction(db, async (transaction) => {
+      const presenteDoc = await transaction.get(presenteRef);
+
+      if (!presenteDoc.exists()) {
+        throw new Error("Item inexistente no sistema.");
+      }
+
+      if (presenteDoc.data().reservado !== true) {
+        throw new Error("Este presente ja esta disponivel.");
+      }
+
+      if (!reservaToken || presenteDoc.data().reservaToken !== reservaToken) {
+        throw new Error("A desreserva so pode ser feita no mesmo navegador que reservou o presente.");
+      }
+
+      transaction.update(presenteRef, {
+        reservado: false,
+        reservadoPor: null,
+        dataReserva: null,
+        reservaToken: null,
+      });
+    });
+
+    return { sucesso: true, mensagem: "Reserva cancelada com sucesso!" };
   } catch (erro) {
     return { sucesso: false, erro: erro.message };
   }
@@ -65,6 +100,8 @@ export async function adicionarPresenteAdmin(dados) {
       ...dados,
       reservado: false,
       reservadoPor: null,
+      reservaToken: null,
+      dataReserva: null,
       dataCriacao: new Date().toISOString(),
     });
 
@@ -89,6 +126,7 @@ export async function libertarPresenteAdmin(id) {
       reservado: false,
       reservadoPor: null,
       dataReserva: null,
+      reservaToken: null,
     });
 
     return { sucesso: true };

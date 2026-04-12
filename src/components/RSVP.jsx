@@ -3,6 +3,7 @@ import { collection, doc, onSnapshot, updateDoc } from "firebase/firestore";
 
 import { appId, db } from "../firebase/firebase.js";
 import { formatRsvpResumo } from "../config/siteConfig.js";
+import useViewport from "../hooks/useViewport.js";
 import { GUEST_STATUS, normalizeGuestStatus } from "../utils/guestStatus.js";
 
 const convidadosRef = () => collection(db, "artifacts", appId, "public", "data", "convidados");
@@ -17,6 +18,7 @@ function clamp(value, max) {
 }
 
 export default function RSVP({ siteConfig }) {
+  const viewport = useViewport();
   const [guests, setGuests] = useState([]);
   const [query, setQuery] = useState("");
   const [selectedId, setSelectedId] = useState("");
@@ -27,6 +29,8 @@ export default function RSVP({ siteConfig }) {
   const [loading, setLoading] = useState(false);
   const safeSiteConfig = useMemo(() => siteConfig ?? {}, [siteConfig]);
   const rsvpBackground = safeSiteConfig?.corFundoRSVP?.trim() || "linear-gradient(150deg, #2f2b73 0%, #181435 100%)";
+  const compactSpacing = viewport.isMobile;
+  const stackedLayout = !viewport.isDesktop;
 
   useEffect(() => {
     const unsub = onSnapshot(convidadosRef(), (snap) => {
@@ -140,16 +144,39 @@ export default function RSVP({ siteConfig }) {
     : safeSiteConfig?.rsvpBuscaInstrucao || "Digite pelo menos 3 letras do seu nome ou sobrenome para procurar o convite.";
 
   return (
-    <section id="rsvp" style={styles.section}>
-      <div style={styles.shell}>
-        <aside style={{ ...styles.aside, background: rsvpBackground }}>
+    <section
+      id="rsvp"
+      style={{
+        ...styles.section,
+        padding: compactSpacing ? "72px 16px" : viewport.isTablet ? "84px 20px" : styles.section.padding,
+      }}
+    >
+      <div
+        style={{
+          ...styles.shell,
+          gap: compactSpacing ? 18 : 24,
+          gridTemplateColumns: stackedLayout ? "1fr" : styles.shell.gridTemplateColumns,
+        }}
+      >
+        <aside
+          style={{
+            ...styles.aside,
+            padding: compactSpacing ? 26 : viewport.isTablet ? 32 : styles.aside.padding,
+            borderRadius: compactSpacing ? 24 : styles.aside.borderRadius,
+            background: rsvpBackground,
+          }}
+        >
           <span style={styles.eyebrow}>{safeSiteConfig?.rsvpEyebrow || "Lista fechada"}</span>
           <h2
             style={{
               ...styles.title,
               fontFamily: safeSiteConfig?.titulosFontFamily,
               fontWeight: safeSiteConfig?.titulosFontWeight,
-              fontSize: safeSiteConfig?.titulosFontSize || styles.title.fontSize,
+              fontSize: safeSiteConfig?.titulosFontSize
+                ? `clamp(${compactSpacing ? "2rem" : "2.3rem"}, 5vw, ${safeSiteConfig.titulosFontSize})`
+                : compactSpacing
+                  ? 34
+                  : styles.title.fontSize,
             }}
           >
             {safeSiteConfig?.rsvpTitulo || "RSVP personalizado"}
@@ -160,7 +187,9 @@ export default function RSVP({ siteConfig }) {
               ...styles.copy,
               fontFamily: safeSiteConfig?.textosFontFamily,
               fontWeight: safeSiteConfig?.textosFontWeight,
-              fontSize: safeSiteConfig?.textosFontSize || styles.copy.fontSize,
+              fontSize: safeSiteConfig?.textosFontSize
+                ? `clamp(0.98rem, 3vw, ${safeSiteConfig.textosFontSize})`
+                : styles.copy.fontSize,
             }}
           >
             {safeSiteConfig?.rsvpDescricao ||
@@ -169,7 +198,9 @@ export default function RSVP({ siteConfig }) {
 
           <div style={styles.deadlineCard}>
             <span style={styles.deadlineLabel}>{safeSiteConfig?.rsvpPrazoLabel || "Data limite para confirmação"}</span>
-            <strong style={styles.deadlineDate}>{safeSiteConfig?.rsvpPrazoData || "11 de maio"}</strong>
+            <strong style={{ ...styles.deadlineDate, fontSize: compactSpacing ? 26 : styles.deadlineDate.fontSize }}>
+              {safeSiteConfig?.rsvpPrazoData || "11 de maio"}
+            </strong>
             <p className="whitespace-pre-line" style={styles.deadlineCopy}>
               {safeSiteConfig?.rsvpPrazoTexto || "Agradecemos, com carinho, que a sua resposta seja enviada até esta data."}
             </p>
@@ -185,7 +216,13 @@ export default function RSVP({ siteConfig }) {
           </div>
         </aside>
 
-        <div style={styles.panel}>
+        <div
+          style={{
+            ...styles.panel,
+            padding: compactSpacing ? 22 : viewport.isTablet ? 30 : styles.panel.padding,
+            borderRadius: compactSpacing ? 24 : styles.panel.borderRadius,
+          }}
+        >
           <div style={styles.searchWrap}>
             <input
               value={query}
@@ -216,6 +253,7 @@ export default function RSVP({ siteConfig }) {
                   ...styles.subtitle,
                   fontFamily: safeSiteConfig?.titulosFontFamily,
                   fontWeight: safeSiteConfig?.titulosFontWeight,
+                  fontSize: compactSpacing ? 24 : styles.subtitle.fontSize,
                 }}
               >
                 {(safeSiteConfig?.rsvpSaudacaoPrefixo || "Olá,")} {selectedGuest.nome}.
@@ -226,7 +264,9 @@ export default function RSVP({ siteConfig }) {
                   ...styles.copy,
                   fontFamily: safeSiteConfig?.textosFontFamily,
                   fontWeight: safeSiteConfig?.textosFontWeight,
-                  fontSize: safeSiteConfig?.textosFontSize || styles.copy.fontSize,
+                  fontSize: safeSiteConfig?.textosFontSize
+                    ? `clamp(0.98rem, 3vw, ${safeSiteConfig.textosFontSize})`
+                    : styles.copy.fontSize,
                 }}
               >
                 {formatRsvpResumo(safeSiteConfig?.rsvpResumoConvite, selectedGuest)}
@@ -234,7 +274,12 @@ export default function RSVP({ siteConfig }) {
 
               <div style={styles.choiceGroup}>
                 <span style={styles.label}>Resposta</span>
-                <div style={styles.choiceList}>
+                <div
+                  style={{
+                    ...styles.choiceList,
+                    gridTemplateColumns: compactSpacing ? "1fr" : styles.choiceList.gridTemplateColumns,
+                  }}
+                >
                   {[GUEST_STATUS.CONFIRMED, GUEST_STATUS.DECLINED].map((option) => (
                     <label
                       key={option}
@@ -257,7 +302,12 @@ export default function RSVP({ siteConfig }) {
                 </div>
               </div>
 
-              <div style={styles.grid}>
+              <div
+                style={{
+                  ...styles.grid,
+                  gridTemplateColumns: compactSpacing ? "1fr" : styles.grid.gridTemplateColumns,
+                }}
+              >
                 <label style={styles.field}>
                   <span style={styles.label}>{safeSiteConfig?.rsvpAdultosLabel || "Quantos adultos vão?"}</span>
                   <input
@@ -315,21 +365,8 @@ const styles = {
   deadlineLabel: { display: "block", fontSize: 11, fontWeight: 800, letterSpacing: "0.18em", textTransform: "uppercase", color: "#f4dfaa", marginBottom: 10 },
   deadlineDate: { display: "block", fontSize: 32, color: "#fff7d6", marginBottom: 8 },
   deadlineCopy: { margin: 0, color: "rgba(255,250,242,0.82)", lineHeight: 1.65 },
-  importantCard: {
-    padding: 22,
-    borderRadius: 24,
-    background: "rgba(255,255,255,0.08)",
-    border: "1px solid rgba(255,247,214,0.16)",
-  },
-  importantLabel: {
-    display: "block",
-    fontSize: 11,
-    fontWeight: 800,
-    letterSpacing: "0.18em",
-    textTransform: "uppercase",
-    color: "#f4dfaa",
-    marginBottom: 12,
-  },
+  importantCard: { padding: 22, borderRadius: 24, background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,247,214,0.16)" },
+  importantLabel: { display: "block", fontSize: 11, fontWeight: 800, letterSpacing: "0.18em", textTransform: "uppercase", color: "#f4dfaa", marginBottom: 12 },
   importantList: { margin: 0, paddingLeft: 18, display: "grid", gap: 10, color: "rgba(255,250,242,0.86)", lineHeight: 1.6 },
   importantItem: { margin: 0 },
   searchWrap: { position: "relative", marginBottom: 18 },
@@ -339,11 +376,11 @@ const styles = {
   dropdownMeta: { color: "#7a6a58", fontSize: 13 },
   emptyState: { padding: 22, borderRadius: 20, background: "rgba(49,46,129,0.05)", color: "#5a4c67" },
   inviteCard: { display: "grid", gap: 18, padding: 24, borderRadius: 24, background: "linear-gradient(160deg, #fffefb 0%, #f8f1e6 100%)", border: "1px solid rgba(196,166,97,0.18)" },
-  grid: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 },
+  grid: { display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 14 },
   field: { display: "grid", gap: 8 },
   label: { fontSize: 11, fontWeight: 800, letterSpacing: "0.16em", textTransform: "uppercase", color: "#8f7a4f" },
   choiceGroup: { display: "grid", gap: 10 },
-  choiceList: { display: "grid", gap: 10 },
+  choiceList: { display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10 },
   choiceCard: { display: "flex", alignItems: "center", gap: 12, padding: "16px 18px", borderRadius: 18, border: "1px solid rgba(49,46,129,0.12)", background: "#fffefb", color: "#241b2f", fontWeight: 600, cursor: "pointer" },
   choiceCardActive: { border: "1px solid rgba(196,166,97,0.42)", background: "rgba(196,166,97,0.12)", boxShadow: "0 16px 30px rgba(36,27,47,0.06)" },
   radioInput: { accentColor: "#a88642", width: 18, height: 18, flexShrink: 0 },

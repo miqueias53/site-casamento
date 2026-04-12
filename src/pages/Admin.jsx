@@ -6,6 +6,7 @@ import { appId, auth, db } from "../firebase/firebase.js";
 import { emptyImageConfig, imageFallbacks, mergeImageConfig, resolveImageSource } from "../config/siteImages.js";
 import { normalizeDeliveryConfig } from "../config/deliveryConfig.js";
 import { defaultSiteConfig, normalizeSiteConfig } from "../config/siteConfig.js";
+import { libertarPresenteAdmin } from "../services/presentes.js";
 import { exportRowsToPdf, exportRowsToXlsx } from "../utils/adminExport.js";
 import { GUEST_STATUS, getGuestConfirmedFlag, normalizeGuestStatus } from "../utils/guestStatus.js";
 
@@ -28,6 +29,37 @@ const emptyConvites = {
     "Ola [NOME]! Estamos muito felizes em partilhar este momento consigo. Aqui esta o link para o nosso site onde podera ver os detalhes e confirmar a sua presenca: [LINK]",
   urlCartaz: "",
 };
+
+function getGuestPartySize(guest) {
+  return Number(guest?.maxAdultos ?? guest?.adultos ?? 0) + Number(guest?.maxCriancas ?? guest?.criancas ?? 0);
+}
+function getGuestChildrenSize(guest) {
+  return Number(guest?.maxCriancas ?? guest?.criancas ?? 0);
+}
+function getNormalizedConfirmedCounts(guest) {
+  if (normalizeGuestStatus(guest) !== GUEST_STATUS.CONFIRMED) {
+    return {
+      adultosConfirmados: 0,
+      criancasConfirmadas: 0,
+    };
+  }
+
+  return getDefaultConfirmedCounts(guest);
+}
+function getConfirmedGuestPartySize(guest) {
+  if (normalizeGuestStatus(guest) !== GUEST_STATUS.CONFIRMED) {
+    return 0;
+  }
+
+  return getGuestPartySize(guest);
+}
+function getConfirmedGuestChildrenSize(guest) {
+  if (normalizeGuestStatus(guest) !== GUEST_STATUS.CONFIRMED) {
+    return 0;
+  }
+
+  return getGuestChildrenSize(guest);
+}
 const emptyEntrega = normalizeDeliveryConfig();
 const fontOptions = [
   "Arial",
@@ -194,14 +226,57 @@ export default function Admin({ onBack }) {
   const stats = useMemo(() => {
     const confirmed = convidados.filter((item) => normalizeGuestStatus(item) === GUEST_STATUS.CONFIRMED);
     const declined = convidados.filter((item) => normalizeGuestStatus(item) === GUEST_STATUS.DECLINED);
+    const reservedGifts = presentes.filter((item) => item.reservado === true);
     return {
+      invites: convidados.length,
+      registeredInvites: convidados.filter((item) => Boolean(item.conviteId)).length,
+      guests: convidados.reduce((total, item) => total + getGuestPartySize(item), 0),
+      confirmed: confirmed.reduce((total, item) => total + getConfirmedGuestPartySize(item), 0),
+      declined: declined.reduce((total, item) => total + getGuestPartySize(item), 0),
+      children: convidados.reduce((total, item) => total + getGuestChildrenSize(item), 0),
+      confirmedChildren: confirmed.reduce((total, item) => total + getConfirmedGuestChildrenSize(item), 0),
       gifts: presentes.length,
-      guests: convidados.length,
-      confirmed: confirmed.length,
-      declined: declined.length,
-      people: confirmed.reduce((t, item) => t + Number(item.adultosConfirmados ?? item.adultos ?? 0) + Number(item.criancasConfirmadas ?? item.criancas ?? 0), 0),
+      reservedGifts: reservedGifts.length,
+      availableGifts: presentes.length - reservedGifts.length,
     };
   }, [convidados, presentes]);
+
+  const showRegisteredInvitesMetric = stats.registeredInvites !== stats.invites;
+  const guestMetricGroups = [
+    {
+      title: "Convites",
+      note: showRegisteredInvitesMetric ? "Existem convites sem ID gerado." : "Todos os convites ja possuem ID gerado.",
+      items: [
+        { label: "Convites", value: stats.invites, help: "Quantidade de registos de convite na lista de convidados." },
+        ...(showRegisteredInvitesMetric
+          ? [{ label: "Convites Registrados", value: stats.registeredInvites, help: "Quantidade de convidados que ja possuem um conviteId gerado." }]
+          : []),
+      ],
+    },
+    {
+      title: "Pessoas",
+      items: [
+        { label: "Pessoas Convidadas", value: stats.guests, help: "Soma de maxAdultos e maxCriancas de todos os convites." },
+        { label: "Pessoas Confirmadas", value: stats.confirmed, help: "Soma da lotacao total dos convites com status Confirmado." },
+        { label: "Pessoas que Recusaram", value: stats.declined, help: "Soma da lotacao dos convites marcados como Nao Comparecera." },
+      ],
+    },
+    {
+      title: "Criancas",
+      items: [
+        { label: "Criancas Registradas", value: stats.children, help: "Soma de maxCriancas de toda a lista de convidados." },
+        { label: "Criancas Confirmadas", value: stats.confirmedChildren, help: "Soma de maxCriancas dos convites com status Confirmado." },
+      ],
+    },
+    {
+      title: "Presentes",
+      items: [
+        { label: "Presentes Cadastrados", value: stats.gifts, help: "Quantidade total de itens cadastrados no catalogo de presentes." },
+        { label: "Presentes Reservados", value: stats.reservedGifts, help: "Quantidade de presentes com reservado === true." },
+        { label: "Presentes Disponiveis", value: stats.availableGifts, help: "Quantidade de presentes ainda livres para reserva." },
+      ],
+    },
+  ];
 
   const convidadosFiltrados = useMemo(() => {
     const termo = buscaConvidado.trim().toLowerCase();
@@ -361,7 +436,15 @@ export default function Admin({ onBack }) {
   const onSaveGift = async (event) => {
     event.preventDefault();
     try {
-      await addDoc(presentesRef(), { ...giftForm, lojaNome: giftForm.loja.trim(), reservado: false, reservadoPor: null, dataCriacao: new Date().toISOString() });
+      await addDoc(presentesRef(), {
+        ...giftForm,
+        lojaNome: giftForm.loja.trim(),
+        reservado: false,
+        reservadoPor: null,
+        dataReserva: null,
+        reservaToken: null,
+        dataCriacao: new Date().toISOString(),
+      });
       setGiftForm(emptyGift);
       setToast("Presente adicionado ao catálogo.");
     } catch (error) {
@@ -475,6 +558,22 @@ export default function Admin({ onBack }) {
     }
   };
 
+  const releaseGiftReservation = async (gift) => {
+    if (!window.confirm(`Deseja liberar a reserva de ${gift.nome}?`)) return;
+    try {
+      const result = await libertarPresenteAdmin(gift.id);
+      if (!result.sucesso) {
+        window.alert(result.erro || "Nao foi possivel liberar a reserva.");
+        return;
+      }
+
+      setToast(`Reserva de ${gift.nome} liberada.`);
+    } catch (error) {
+      console.error(error);
+      window.alert("Nao foi possivel liberar a reserva.");
+    }
+  };
+
   const removeGuest = async (id) => {
     if (!window.confirm("Deseja remover este convidado?")) return;
     try {
@@ -534,6 +633,7 @@ export default function Admin({ onBack }) {
       Valor: item.valor || "",
       Estado: item.reservado ? "Reservado" : "Disponivel",
       "Reservado por": item.reservadoPor || "",
+      "Data da reserva": formatDateTime(item.dataReserva),
       "Link da loja": item.linkCompra || "",
       "Data de criacao": formatDateTime(item.dataCriacao),
     }));
@@ -553,29 +653,33 @@ export default function Admin({ onBack }) {
       item.valor || "-",
       item.reservado ? "Reservado" : "Disponivel",
       item.reservadoPor || "-",
+      formatDateTime(item.dataReserva),
     ]));
 
     exportRowsToPdf({
       baseName: "presentes",
       title: "Lista de Presentes",
-      head: [["Presente", "Loja", "Valor", "Estado", "Reservado por"]],
+      head: [["Presente", "Loja", "Valor", "Estado", "Reservado por", "Data da reserva"]],
       body,
     });
     setToast("Lista de presentes exportada em PDF.");
   };
 
   const exportConvidadosAsXlsx = () => {
-    const rows = convidados.map((item) => ({
-      Convidado: item.nome || "",
-      "Convite ID": item.conviteId || "",
-      "Max. adultos": Number(item.maxAdultos || 0),
-      "Max. criancas": Number(item.maxCriancas || 0),
-      "Adultos confirmados": Number(item.adultosConfirmados || 0),
-      "Criancas confirmadas": Number(item.criancasConfirmadas || 0),
-      Status: normalizeGuestStatus(item),
-      "Data de criacao": formatDateTime(item.dataCriacao),
-      "Data de resposta": formatDateTime(item.dataResposta),
-    }));
+    const rows = convidados.map((item) => {
+      const confirmedCounts = getNormalizedConfirmedCounts(item);
+      return {
+        Convidado: item.nome || "",
+        "Convite ID": item.conviteId || "",
+        "Max. adultos": Number(item.maxAdultos || 0),
+        "Max. criancas": Number(item.maxCriancas || 0),
+        "Adultos confirmados": Number(confirmedCounts.adultosConfirmados || 0),
+        "Criancas confirmadas": Number(confirmedCounts.criancasConfirmadas || 0),
+        Status: normalizeGuestStatus(item),
+        "Data de criacao": formatDateTime(item.dataCriacao),
+        "Data de resposta": formatDateTime(item.dataResposta),
+      };
+    });
 
     exportRowsToXlsx({
       baseName: "convidados",
@@ -586,13 +690,16 @@ export default function Admin({ onBack }) {
   };
 
   const exportConvidadosAsPdf = () => {
-    const body = convidados.map((item) => ([
-      item.nome || "-",
-      item.conviteId || "-",
-      `${item.maxAdultos || 0}A / ${item.maxCriancas || 0}C`,
-      `${item.adultosConfirmados || 0}A / ${item.criancasConfirmadas || 0}C`,
-      normalizeGuestStatus(item),
-    ]));
+    const body = convidados.map((item) => {
+      const confirmedCounts = getNormalizedConfirmedCounts(item);
+      return [
+        item.nome || "-",
+        item.conviteId || "-",
+        `${item.maxAdultos || 0}A / ${item.maxCriancas || 0}C`,
+        `${confirmedCounts.adultosConfirmados || 0}A / ${confirmedCounts.criancasConfirmadas || 0}C`,
+        normalizeGuestStatus(item),
+      ];
+    });
 
     exportRowsToPdf({
       baseName: "convidados",
@@ -656,12 +763,32 @@ export default function Admin({ onBack }) {
       </header>
 
       <main style={styles.content}>
-        <section style={styles.metrics}>
-          <Metric label="Presentes" value={stats.gifts} />
-          <Metric label="Convidados" value={stats.guests} />
-          <Metric label="Confirmados" value={stats.confirmed} />
-          <Metric label="Não Comparecerão" value={stats.declined} />
-          <Metric label="Pessoas" value={stats.people} />
+        <section style={styles.metricsPanel}>
+          <div style={styles.metricsPanelHeader}>
+            <div>
+              <span style={styles.eyebrow}>Resumo inteligente</span>
+              <h2 style={styles.metricsPanelTitle}>Painel de convites, pessoas e criancas</h2>
+            </div>
+            <div style={styles.metricsPanelNote}>
+              Passe o rato ou toque no <strong>?</strong> para ver como cada numero e calculado.
+            </div>
+          </div>
+
+          <div style={styles.metricsGroupGrid}>
+            {guestMetricGroups.map((group) => (
+              <section key={group.title} style={styles.metricsGroupCard}>
+                <div style={styles.metricsGroupHeader}>
+                  <span style={styles.metricsGroupTitle}>{group.title}</span>
+                  {group.note ? <span style={styles.metricsGroupNote}>{group.note}</span> : null}
+                </div>
+                <div style={styles.metrics}>
+                  {group.items.map((item) => (
+                    <Metric key={item.label} label={item.label} value={item.value} help={item.help} />
+                  ))}
+                </div>
+              </section>
+            ))}
+          </div>
         </section>
 
         <section style={styles.card}>
@@ -706,14 +833,21 @@ export default function Admin({ onBack }) {
                   placeholder="Pesquisar presente ou loja..."
                   className="mb-5 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 md:w-1/3"
                 />
-                <Table headers={["Presente", "Loja", "Valor", "Estado", "A??o"]}>
+                <Table headers={["Presente", "Loja", "Valor", "Estado", "Acoes"]}>
                   {presentesFiltrados.length > 0 ? presentesFiltrados.map((item) => (
                     <tr key={item.id}>
                       <td style={styles.td}>{item.nome}</td>
                       <td style={styles.td}>{item.loja || item.lojaNome || "Manual"}</td>
                       <td style={styles.td}>{item.valor || "Sem valor"}</td>
                       <td style={styles.td}>{item.reservado ? `Reservado por ${item.reservadoPor || "convidado"}` : "Disponível"}</td>
-                      <td style={styles.td}><button type="button" onClick={() => removeGift(item.id)} style={styles.action}>Remover</button></td>
+                      <td style={styles.td}>
+                        <div style={styles.tableActions}>
+                          {item.reservado ? (
+                            <button type="button" onClick={() => releaseGiftReservation(item)} style={styles.action}>Liberar</button>
+                          ) : null}
+                          <button type="button" onClick={() => removeGift(item.id)} style={styles.action}>Remover</button>
+                        </div>
+                      </td>
                     </tr>
                   )) : (
                     <tr>
@@ -993,8 +1127,34 @@ export default function Admin({ onBack }) {
   );
 }
 
-function Metric({ label, value }) {
-  return <article style={styles.metric}><span style={styles.metricLabel}>{label}</span><strong style={styles.metricValue}>{value}</strong></article>;
+function Metric({ label, value, help }) {
+  const [showHelp, setShowHelp] = useState(false);
+
+  return (
+    <article
+      style={styles.metric}
+      onMouseEnter={() => setShowHelp(true)}
+      onMouseLeave={() => setShowHelp(false)}
+    >
+      <div style={styles.metricHeader}>
+        <span style={styles.metricLabel}>{label}</span>
+        {help ? (
+          <button
+            type="button"
+            aria-label={`Explicacao sobre ${label}`}
+            onClick={() => setShowHelp((current) => !current)}
+            onFocus={() => setShowHelp(true)}
+            onBlur={() => setShowHelp(false)}
+            style={styles.metricHelpButton}
+          >
+            ?
+          </button>
+        ) : null}
+      </div>
+      <strong style={styles.metricValue}>{value}</strong>
+      {help && showHelp ? <div style={styles.metricTooltip}>{help}</div> : null}
+    </article>
+  );
 }
 
 function Table({ headers, children }) {
@@ -1835,10 +1995,22 @@ const styles = {
   topbar: { maxWidth: 1180, margin: "0 auto 22px", padding: 24, borderRadius: 30, background: "rgba(255,252,247,0.92)", border: "1px solid rgba(196,166,97,0.22)", boxShadow: "0 26px 56px rgba(36,27,47,0.1)", display: "flex", justifyContent: "space-between", gap: 20, alignItems: "center" },
   content: { maxWidth: 1180, margin: "0 auto" },
   row: { display: "flex", gap: 12, alignItems: "center" },
-  metrics: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))", gap: 18, marginBottom: 22 },
-  metric: { padding: 24, borderRadius: 28, background: "rgba(255,254,250,0.94)", border: "1px solid rgba(196,166,97,0.18)", boxShadow: "0 22px 46px rgba(49,46,129,0.08)" },
+  metricsPanel: { display: "grid", gap: 18, marginBottom: 22 },
+  metricsPanelHeader: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16, flexWrap: "wrap" },
+  metricsPanelTitle: { margin: "10px 0 0", fontSize: 28, color: "#241b2f" },
+  metricsPanelNote: { maxWidth: 360, padding: "14px 16px", borderRadius: 18, background: "rgba(255,253,248,0.92)", border: "1px solid rgba(196,166,97,0.16)", color: "#5a4c67", lineHeight: 1.6, boxShadow: "0 18px 36px rgba(36,27,47,0.06)" },
+  metricsGroupGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 18 },
+  metricsGroupCard: { padding: 22, borderRadius: 30, background: "rgba(255,253,248,0.95)", border: "1px solid rgba(196,166,97,0.18)", boxShadow: "0 22px 46px rgba(49,46,129,0.08)", display: "grid", gap: 16 },
+  metricsGroupHeader: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" },
+  metricsGroupTitle: { fontSize: 12, fontWeight: 900, letterSpacing: "0.18em", textTransform: "uppercase", color: "#8f7a4f" },
+  metricsGroupNote: { padding: "8px 12px", borderRadius: 999, background: "rgba(49,46,129,0.08)", color: "#4c3f5e", fontSize: 11, fontWeight: 700 },
+  metrics: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: 16 },
+  metric: { position: "relative", padding: 22, borderRadius: 26, background: "linear-gradient(160deg, rgba(255,254,250,0.98) 0%, rgba(248,241,230,0.88) 100%)", border: "1px solid rgba(196,166,97,0.16)", boxShadow: "0 18px 38px rgba(49,46,129,0.06)" },
+  metricHeader: { display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10, marginBottom: 12 },
   metricLabel: { display: "block", marginBottom: 10, fontSize: 11, fontWeight: 800, letterSpacing: "0.18em", textTransform: "uppercase", color: "#8f7a4f" },
   metricValue: { fontSize: 38, color: "#241b2f" },
+  metricHelpButton: { width: 28, height: 28, borderRadius: 999, border: "1px solid rgba(49,46,129,0.12)", background: "#fffefb", color: "#312e81", fontSize: 13, fontWeight: 900, cursor: "pointer", flexShrink: 0 },
+  metricTooltip: { position: "absolute", top: 16, right: 16, width: "min(260px, calc(100vw - 64px))", padding: "14px 16px", borderRadius: 18, background: "#241b2f", color: "#fffaf2", lineHeight: 1.55, boxShadow: "0 22px 46px rgba(36,27,47,0.28)", zIndex: 4 },
   card: { background: "rgba(255,253,248,0.95)", border: "1px solid rgba(196,166,97,0.18)", borderRadius: 34, boxShadow: "0 26px 66px rgba(36,27,47,0.08)", padding: 24 },
   tabs: { display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 22 },
   tab: { padding: "12px 18px", borderRadius: 999, border: "1px solid rgba(49,46,129,0.12)", background: "#fffefb", color: "#4c3f5e", fontSize: 12, fontWeight: 800, letterSpacing: "0.16em", textTransform: "uppercase", cursor: "pointer" },
@@ -1862,6 +2034,7 @@ const styles = {
   table: { width: "100%", borderCollapse: "collapse" },
   th: { textAlign: "left", padding: "16px 18px", fontSize: 11, fontWeight: 800, letterSpacing: "0.16em", textTransform: "uppercase", color: "#8f7a4f", borderBottom: "1px solid rgba(196,166,97,0.16)" },
   td: { padding: "16px 18px", fontSize: 14, color: "#3f3650", borderBottom: "1px solid rgba(36,27,47,0.06)", verticalAlign: "top" },
+  tableActions: { display: "flex", gap: 12, flexWrap: "wrap" },
   action: { border: "none", background: "transparent", color: "#312e81", fontWeight: 700, cursor: "pointer" },
   badgePending: { display: "inline-flex", padding: "8px 12px", borderRadius: 999, background: "rgba(245, 158, 11, 0.16)", color: "#b45309", fontSize: 11, fontWeight: 800, textTransform: "uppercase" },
   badgeConfirmed: { display: "inline-flex", padding: "8px 12px", borderRadius: 999, background: "rgba(34, 197, 94, 0.16)", color: "#166534", fontSize: 11, fontWeight: 800, textTransform: "uppercase" },

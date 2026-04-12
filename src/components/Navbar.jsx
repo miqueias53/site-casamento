@@ -1,5 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 
+import useViewport from "../hooks/useViewport.js";
+
 const defaultNavItems = [
   { id: "historia", label: "História" },
   { id: "local", label: "Local" },
@@ -7,7 +9,7 @@ const defaultNavItems = [
   { id: "presentes", label: "Presentes" },
 ];
 
-function scrollToSection(sectionId, setView) {
+function scrollToSection(sectionId, setView, onDone) {
   setView("public");
 
   const nextUrl = sectionId
@@ -21,10 +23,12 @@ function scrollToSection(sectionId, setView) {
 
     if (target) {
       target.scrollIntoView({ behavior: "smooth", block: "start" });
+      onDone?.();
       return;
     }
 
     window.scrollTo({ top: 0, behavior: "smooth" });
+    onDone?.();
   });
 }
 
@@ -35,7 +39,10 @@ export default function Navbar({
   homeSectionId = "inicio",
 }) {
   const [isVisible, setIsVisible] = useState(true);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
   const lastScrollY = useRef(0);
+  const viewport = useViewport();
+  const useMobileMenu = !viewport.isDesktop;
   const brandLabel = siteConfig?.heroTitulo || "Miqueias & Maria Eduarda";
 
   useEffect(() => {
@@ -48,6 +55,7 @@ export default function Navbar({
         setIsVisible(true);
       } else if (currentScrollY > lastScrollY.current) {
         setIsVisible(false);
+        setIsMenuOpen(false);
       } else {
         setIsVisible(true);
       }
@@ -59,6 +67,15 @@ export default function Navbar({
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
+  useEffect(() => {
+    if (!useMobileMenu) {
+      setIsMenuOpen(false);
+    }
+  }, [useMobileMenu]);
+
+  const closeMenu = () => setIsMenuOpen(false);
+  const handleNavigate = (sectionId) => scrollToSection(sectionId, setView, closeMenu);
+
   return (
     <header
       className={`fixed top-0 z-50 w-full transition-transform duration-300 ease-in-out ${isVisible ? "translate-y-0" : "-translate-y-full"}`}
@@ -67,26 +84,47 @@ export default function Navbar({
         transform: isVisible ? "translateY(0)" : "translateY(-100%)",
       }}
     >
-      <div style={headerInnerStyle}>
-        <div style={logoWrapStyle}>
-          <span style={eyebrowStyle}>Wedding Experience</span>
-          <button type="button" onClick={() => scrollToSection(homeSectionId, setView)} style={brandButtonStyle}>
-            {brandLabel}
-          </button>
+      <div style={headerInnerStyle(useMobileMenu, isMenuOpen)}>
+        <div style={headerTopStyle}>
+          <div style={logoWrapStyle}>
+            <span style={eyebrowStyle}>Wedding Experience</span>
+            <button type="button" onClick={() => handleNavigate(homeSectionId)} style={brandButtonStyle(useMobileMenu)}>
+              {brandLabel}
+            </button>
+          </div>
+
+          {useMobileMenu ? (
+            <button
+              type="button"
+              style={menuToggleStyle}
+              aria-label={isMenuOpen ? "Fechar navegacao" : "Abrir navegacao"}
+              aria-expanded={isMenuOpen}
+              onClick={() => setIsMenuOpen((current) => !current)}
+            >
+              {isMenuOpen ? "Fechar" : "Menu"}
+            </button>
+          ) : null}
         </div>
 
-        <nav style={navStyle} aria-label="Navegação principal">
+        <nav style={navStyle(useMobileMenu, isMenuOpen)} aria-label="Navegação principal">
           {navItems?.map((item) => (
             <button
               key={item.id}
               type="button"
-              style={navButtonStyle}
-              onClick={() => scrollToSection(item.id, setView)}
+              style={navButtonStyle(useMobileMenu)}
+              onClick={() => handleNavigate(item.id)}
             >
               {item.label}
             </button>
           ))}
-          <button type="button" style={adminButtonStyle} onClick={() => setView("admin")}>
+          <button
+            type="button"
+            style={adminButtonStyle(useMobileMenu)}
+            onClick={() => {
+              closeMenu();
+              setView("admin");
+            }}
+          >
             Área Admin
           </button>
         </nav>
@@ -106,25 +144,31 @@ const headerShellStyle = {
   transition: "transform 300ms ease-in-out",
 };
 
-const headerInnerStyle = {
+const headerInnerStyle = (useMobileMenu, isMenuOpen) => ({
   margin: "0 auto",
-  width: "min(1180px, calc(100% - 28px))",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "space-between",
-  gap: "24px",
-  padding: "18px 24px",
-  borderRadius: "28px",
+  width: "min(1180px, calc(100% - 20px))",
+  display: "grid",
+  gap: useMobileMenu && isMenuOpen ? "16px" : 0,
+  padding: useMobileMenu ? "14px 16px" : "18px 24px",
+  borderRadius: useMobileMenu ? "24px" : "28px",
   background: "rgba(255, 251, 245, 0.82)",
   border: "1px solid rgba(196, 166, 97, 0.22)",
   boxShadow: "0 18px 45px rgba(36, 27, 47, 0.12)",
   backdropFilter: "blur(18px)",
+});
+
+const headerTopStyle = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: "16px",
 };
 
 const logoWrapStyle = {
   display: "flex",
   flexDirection: "column",
   gap: "4px",
+  minWidth: 0,
 };
 
 const eyebrowStyle = {
@@ -135,42 +179,43 @@ const eyebrowStyle = {
   fontWeight: 700,
 };
 
-const brandButtonStyle = {
+const brandButtonStyle = (useMobileMenu) => ({
   border: "none",
   background: "transparent",
   padding: 0,
-  fontSize: "20px",
+  fontSize: useMobileMenu ? "16px" : "20px",
   fontWeight: 700,
   color: "#261f33",
   cursor: "pointer",
   textAlign: "left",
-};
+  minWidth: 0,
+});
 
-const navStyle = {
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "flex-end",
-  flexWrap: "wrap",
+const navStyle = (useMobileMenu, isMenuOpen) => ({
+  display: useMobileMenu ? (isMenuOpen ? "grid" : "none") : "flex",
+  alignItems: useMobileMenu ? "stretch" : "center",
+  justifyContent: useMobileMenu ? "stretch" : "flex-end",
   gap: "10px",
-};
+});
 
-const navButtonStyle = {
+const navButtonStyle = (useMobileMenu) => ({
   border: "none",
   background: "transparent",
   color: "#3f3650",
-  padding: "10px 14px",
+  padding: useMobileMenu ? "12px 14px" : "10px 14px",
   borderRadius: "999px",
   cursor: "pointer",
-  fontSize: "14px",
+  fontSize: useMobileMenu ? "13px" : "14px",
   fontWeight: 600,
   letterSpacing: "0.02em",
-};
+  textAlign: useMobileMenu ? "left" : "center",
+});
 
-const adminButtonStyle = {
+const adminButtonStyle = (useMobileMenu) => ({
   border: "1px solid rgba(196, 166, 97, 0.28)",
   background: "linear-gradient(135deg, #312e81 0%, #211c58 100%)",
   color: "#fffaf0",
-  padding: "11px 18px",
+  padding: useMobileMenu ? "12px 16px" : "11px 18px",
   borderRadius: "999px",
   cursor: "pointer",
   fontSize: "12px",
@@ -178,4 +223,19 @@ const adminButtonStyle = {
   letterSpacing: "0.14em",
   textTransform: "uppercase",
   boxShadow: "0 12px 24px rgba(49, 46, 129, 0.28)",
+  textAlign: "center",
+});
+
+const menuToggleStyle = {
+  border: "1px solid rgba(49, 46, 129, 0.14)",
+  background: "#fffefb",
+  color: "#312e81",
+  padding: "10px 14px",
+  borderRadius: "999px",
+  fontSize: "11px",
+  fontWeight: 900,
+  letterSpacing: "0.14em",
+  textTransform: "uppercase",
+  cursor: "pointer",
+  flexShrink: 0,
 };
