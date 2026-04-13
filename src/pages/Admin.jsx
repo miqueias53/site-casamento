@@ -226,6 +226,7 @@ export default function Admin({ onBack }) {
   const stats = useMemo(() => {
     const confirmed = convidados.filter((item) => normalizeGuestStatus(item) === GUEST_STATUS.CONFIRMED);
     const declined = convidados.filter((item) => normalizeGuestStatus(item) === GUEST_STATUS.DECLINED);
+    const pending = convidados.filter((item) => normalizeGuestStatus(item) === GUEST_STATUS.PENDING);
     const reservedGifts = presentes.filter((item) => item.reservado === true);
     return {
       invites: convidados.length,
@@ -233,6 +234,7 @@ export default function Admin({ onBack }) {
       guests: convidados.reduce((total, item) => total + getGuestPartySize(item), 0),
       confirmed: confirmed.reduce((total, item) => total + getConfirmedGuestPartySize(item), 0),
       declined: declined.reduce((total, item) => total + getGuestPartySize(item), 0),
+      pending: pending.reduce((total, item) => total + getGuestPartySize(item), 0),
       children: convidados.reduce((total, item) => total + getGuestChildrenSize(item), 0),
       confirmedChildren: confirmed.reduce((total, item) => total + getConfirmedGuestChildrenSize(item), 0),
       gifts: presentes.length,
@@ -258,6 +260,7 @@ export default function Admin({ onBack }) {
       items: [
         { label: "Pessoas Convidadas", value: stats.guests, help: "Soma de maxAdultos e maxCriancas de todos os convites." },
         { label: "Pessoas Confirmadas", value: stats.confirmed, help: "Soma da lotacao total dos convites com status Confirmado." },
+        { label: "Pessoas Pendentes", value: stats.pending, help: "Soma da lotacao total dos convites com status Pendente." },
         { label: "Pessoas que Recusaram", value: stats.declined, help: "Soma da lotacao dos convites marcados como Nao Comparecera." },
       ],
     },
