@@ -1,4 +1,5 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { collection, doc, onSnapshot } from "firebase/firestore";
 
 import { normalizeDeliveryConfig } from "../config/deliveryConfig.js";
@@ -63,6 +64,7 @@ function formatReservationDate(value) {
 
 export default function Presentes({ siteConfig }) {
   const viewport = useViewport();
+  const modalCardRef = useRef(null);
   const [presentes, setPresentes] = useState([]);
   const [pix, setPix] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -151,6 +153,11 @@ export default function Presentes({ siteConfig }) {
     return () => {
       document.body.style.overflow = previousOverflow;
     };
+  }, [selectedGiftId]);
+
+  useEffect(() => {
+    if (!selectedGiftId || !modalCardRef.current) return;
+    modalCardRef.current.scrollTop = 0;
   }, [selectedGiftId]);
 
   const copyPix = async () => {
@@ -374,19 +381,22 @@ export default function Presentes({ siteConfig }) {
 
       {toast ? <div style={styles.toast}>{toast}</div> : null}
 
-      {selectedGift ? (
+      {selectedGift && typeof document !== "undefined"
+        ? createPortal(
         <div
           style={{
             ...styles.modalBackdrop,
             padding: viewport.isDesktop ? 24 : 0,
           }}
           onClick={closeGiftPanel}
+          role="presentation"
         >
           <div
+            ref={modalCardRef}
             style={{
               ...styles.modalCard,
               width: viewport.isDesktop ? "min(760px, calc(100vw - 48px))" : "100vw",
-              height: viewport.isDesktop ? "min(92vh, 920px)" : "100vh",
+              height: viewport.isDesktop ? "min(92dvh, 920px)" : "100dvh",
               maxWidth: viewport.isDesktop ? "760px" : "100vw",
               padding: viewport.isMobile ? 22 : 34,
               borderRadius: viewport.isDesktop ? 32 : 0,
@@ -394,6 +404,8 @@ export default function Presentes({ siteConfig }) {
               border: viewport.isDesktop ? "1px solid rgba(196,166,97,0.16)" : "none",
             }}
             onClick={(event) => event.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
             aria-live="polite"
           >
             <div style={styles.modalHeader}>
@@ -507,8 +519,10 @@ export default function Presentes({ siteConfig }) {
               )}
             </div>
           </div>
-        </div>
-      ) : null}
+        </div>,
+        document.body
+      )
+        : null}
     </section>
   );
 }
@@ -538,8 +552,8 @@ const styles = {
   disabledButton: { padding: "16px 18px", borderRadius: 18, border: "1px solid rgba(36,27,47,0.08)", background: "#ece8e1", color: "#90859f", fontSize: 12, fontWeight: 900, letterSpacing: "0.16em", textTransform: "uppercase", cursor: "not-allowed" },
   disabledButtonCompact: { padding: "14px 16px", borderRadius: 16, border: "1px solid rgba(36,27,47,0.08)", background: "#ece8e1", color: "#90859f", fontSize: 11, fontWeight: 900, letterSpacing: "0.14em", textTransform: "uppercase", cursor: "not-allowed" },
   toast: { position: "fixed", bottom: 28, left: "50%", transform: "translateX(-50%)", padding: "14px 18px", borderRadius: 18, background: "#241b2f", color: "#fffaf2", boxShadow: "0 24px 50px rgba(36,27,47,0.26)", zIndex: 120, width: "min(420px, calc(100vw - 32px))", textAlign: "center" },
-  modalBackdrop: { position: "fixed", inset: 0, background: "rgba(18,16,32,0.36)", backdropFilter: "blur(4px)", display: "grid", placeItems: "center", padding: 0, zIndex: 110 },
-  modalCard: { width: "100vw", height: "100vh", maxWidth: "100vw", maxHeight: "100vh", overflowY: "auto", padding: 34, borderRadius: 0, background: "rgba(255,253,248,0.99)", border: "none", boxShadow: "none", display: "grid", gap: 20, alignContent: "start" },
+  modalBackdrop: { position: "fixed", inset: 0, width: "100vw", height: "100dvh", background: "rgba(18,16,32,0.36)", backdropFilter: "blur(4px)", display: "grid", placeItems: "center", padding: 0, zIndex: 110 },
+  modalCard: { width: "100vw", height: "100dvh", maxWidth: "100vw", maxHeight: "100dvh", overflowY: "auto", padding: 34, borderRadius: 0, background: "rgba(255,253,248,0.99)", border: "none", boxShadow: "none", display: "grid", gap: 20, alignContent: "start" },
   modalHeader: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16 },
   closeButton: { width: 42, height: 42, borderRadius: 999, border: "1px solid rgba(49,46,129,0.12)", background: "#fffefb", color: "#312e81", fontSize: 16, fontWeight: 900, cursor: "pointer", flexShrink: 0 },
   giftSummary: { padding: 18, borderRadius: 22, background: "linear-gradient(160deg, rgba(255,254,250,0.98) 0%, rgba(248,241,230,0.88) 100%)", border: "1px solid rgba(196,166,97,0.16)", display: "grid", gap: 6 },
